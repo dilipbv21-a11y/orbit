@@ -214,11 +214,49 @@ label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
   .composer{padding:8px 10px 10px}
   .page{padding:16px}
 }
+
+/* --- rich messages --- */
+.composer{align-items:flex-end}
+.composer textarea{flex:1;min-width:0;resize:none;border-radius:20px;padding:10px 14px;max-height:140px;line-height:1.4;font:inherit;overflow-y:auto}
+.cbtn{width:40px;height:40px;border:0;background:none;border-radius:50%;font-size:20px;display:grid;place-items:center;flex:none}
+.cbtn:hover{background:var(--panel)}
+.epanel{background:var(--panel);border-top:1px solid var(--line)}
+.etabs{display:flex;align-items:center;gap:6px;padding:8px 10px 4px}
+.etabs button:not(.iconb){border:0;background:none;padding:6px 10px;border-radius:999px;font-weight:600;font-size:13px;color:var(--muted)}
+.etabs button.on{background:var(--accent-soft);color:var(--accent)}
+.etabs .sp{flex:1}
+.egrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));max-height:200px;overflow:auto;padding:4px 8px 10px}
+.egrid button{border:0;background:none;font-size:24px;height:40px;border-radius:8px}
+.egrid button:hover{background:var(--panel2)}
+.sgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px;max-height:220px;overflow:auto;padding:6px 10px 12px}
+.sgrid button{border:0;background:none;padding:4px;border-radius:12px}
+.sgrid button:hover{background:var(--panel2)}
+.sgrid svg{width:64px;height:64px;border-radius:50%;display:block;margin:auto}
+.stk svg{width:120px;height:120px;border-radius:50%;display:block}
+.bub.stkb{background:transparent!important;box-shadow:none;padding:2px}
+.bub.mediab{padding:4px 4px 3px}
+.bub.mediab .mt,.bub.mediab .mm,.bub.mediab .mf,.bub.mediab .quote{margin-left:6px;margin-right:6px}
+.mimg img{display:block;max-width:min(280px,100%);height:auto;max-height:340px;object-fit:cover;border-radius:10px;background:var(--panel2)}
+.mvid{display:block;width:280px;max-width:100%;max-height:340px;border-radius:10px;background:#000}
+.maud{display:block;width:250px;max-width:100%;height:40px}
+.mfile{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:10px;background:var(--panel2);color:inherit;text-decoration:none;max-width:280px}
+.mfile .fic{font-size:28px}.fmeta{display:flex;flex-direction:column;min-width:0}.fmeta b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.fmeta small{color:var(--muted)}
+.mt a{color:var(--accent);text-decoration:underline;overflow-wrap:anywhere}
+.quote{border-left:3px solid var(--accent);background:#0000000d;border-radius:6px;padding:4px 8px;margin:2px 0 4px;display:flex;flex-direction:column;cursor:pointer;min-width:0}
+.quote b{font-size:12px;color:var(--accent)}.quote span{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.replybar{display:flex;gap:8px;align-items:center;padding:8px 12px;background:var(--panel);border-top:1px solid var(--line)}
+.replybar .quote{flex:1;margin:0;cursor:default}
+.upl{padding:6px 16px;font-size:13px;color:var(--muted);background:var(--panel2)}
+.recbar{flex:1;display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:20px;background:var(--panel);font-weight:600}
+.recdot{width:10px;height:10px;border-radius:50%;background:#e5484d;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+a.srow{color:inherit;text-decoration:none}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
 <script>
 /* ---------- config ---------- */
 const DOMAINS=['ssb.scaler.com'];
@@ -263,9 +301,10 @@ const av=(k,size=36)=>{const a=AV[k]||AVATARS[0];return `<span class="av" style=
 
 const BB_SVG=S('#1a0f2b',`<polygon points="${burst(32,32,14,30,12)}" fill="#ff6fb5"/><polygon points="${burst(32,32,10,21,9)}" fill="#ffb347"/><polygon points="${burst(32,32,7,13,6)}" fill="#fff3a8"/><circle cx="32" cy="32" r="4" fill="#fff"/>`);
 
-/* ---------- backend (paste your two Supabase values here) ---------- */
-const SUPABASE_URL='https://oeocdhkoxavjsxypwcjr.supabase.co';
-const SUPABASE_KEY='sb_publishable_IxWmSzsSg6pqhZRzaD7ZCw_wXqNFROZ';
+/* ---------- backend: values come from config.js (so updating this file never wipes your key) ---------- */
+const CFG=window.ORBIT_CONFIG||{};
+const SUPABASE_URL=CFG.SUPABASE_URL||'https://oeocdhkoxavjsxypwcjr.supabase.co';
+const SUPABASE_KEY=CFG.SUPABASE_KEY||'PASTE_YOUR_PUBLISHABLE_KEY_HERE';
 const CONFIGURED=/^https:\/\//.test(SUPABASE_URL)&&!SUPABASE_KEY.startsWith('PASTE');
 const sb=CONFIGURED&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 const T=s=>s?Date.parse(String(s).replace(/(\.\d{3})\d+/,'$1')):0;
@@ -321,7 +360,7 @@ function build(){
   [...R.messages].sort((a,b)=>T(a.created_at)-T(b.created_at)).forEach(m=>{
     const tgt=m.group_id?groups[m.group_id]:common;if(!tgt)return;const ts=T(m.created_at),from=m.sender_id?byId[m.sender_id]:null;
     let rcpt=[];if(!m.is_system&&from)rcpt=m.group_id?tgt.members.filter(e=>e!==from&&(tgt.joined[e]||0)<=ts):Object.values(users).filter(u=>u.email!==from&&u.since<=ts).map(u=>u.email);
-    tgt.messages.push({id:m.id,from,text:m.body,ts,sys:m.is_system,rcpt});});
+    tgt.messages.push({id:m.id,from,text:m.body||'',ts,sys:m.is_system,rcpt,kind:m.kind||'text',media:m.media||null,replyTo:m.reply_to||null});});
   R.pins.forEach(p=>{const tgt=p.group_id?groups[p.group_id]:common;if(tgt)tgt.pins.push({id:p.message_id,by:byId[p.pinned_by],ts:T(p.created_at)});});
   const reads={};R.reads.forEach(r=>{const cid=r.chat_key==='bigbang'?'common':r.chat_key,e=byId[r.user_id];if(e)(reads[cid]=reads[cid]||{})[e]=T(r.last_read_at);});
   st={session:AUTH?AUTH.email:null,users,groups,common,reads};
@@ -330,8 +369,9 @@ function build(){
 const pending=new Set();let pendT=null;
 function queueRefresh(k){pending.add(k);clearTimeout(pendT);pendT=setTimeout(()=>{const ks=[...pending];pending.clear();refresh(ks);},250);}
 // ---------- live updates via the Orbit relay (Cloudflare, free, 500+ people online) ----------
-const LIVE_URL='wss://orbit-live.dilipbv21.workers.dev/live';
-const LIVE_ON=!/dilipbv21/.test(LIVE_URL);
+const LIVE_URL=CFG.LIVE_URL||'wss://orbit-live.dilipbv21.workers.dev/live';
+const MEDIA_BASE=LIVE_URL.replace(/^wss:/,'https:').replace(/\/live$/,'');
+const LIVE_ON=/^wss:\/\/[^/]+\.workers\.dev\//.test(LIVE_URL)&&!/YOUR-SUBDOMAIN/.test(LIVE_URL);
 let liveWs=null,liveTimer=null,liveBackoff=1000,livePing=null,liveStop=true;
 function subscribe(){if(!LIVE_ON)return subscribeSupabase();liveStop=false;liveConnect(false);}
 async function liveConnect(isRetry){
@@ -441,7 +481,7 @@ function orbitHero(){
 function renderAuth(){
   const a=$('app');let body='';
   if(auth.step==='config') body=`${orbitHero()}<h2>Almost there</h2><p class="lede">Orbit isn't connected to its database yet.</p>
-    <div class="notice">Open index.html and paste your Supabase Project URL and publishable key into SUPABASE_URL and SUPABASE_KEY near the top of the script.</div>`;
+    <div class="notice">Add a config.js file next to index.html with your Supabase publishable key (see setup notes).</div>`;
   else if(auth.step==='loading') body=`${orbitHero()}<p class="lede">Loading Orbit…</p>`;
   else if(auth.step==='email') body=`${orbitHero()}<h2>Your campus, past and present</h2><p class="lede">Students and alumni, verified by official college email.</p>
     <label for="em">SSB email</label><input id="em" type="email" autocomplete="email" placeholder="you@${DOMAINS[0]}" value="${esc(auth.email)}">
@@ -474,7 +514,7 @@ function chatList(me){
     return {...x,last,ts:last?last.ts:(st.groups[x.cid]?.created||0)}});
   const big=items[0],rest=items.slice(1).sort((a,b)=>b.ts-a.ts);
   const row=x=>{const l=x.last,u=unread(x.cid),own=l&&!l.sys&&l.from===me.email;
-    const prev=l?(l.sys?l.text:`${own?'You':uname(l.from)}: ${l.text}`):(x.cid==='common'?'Everyone at SSB is here. Say hi.':'No messages yet');
+    const prev=l?(l.sys?l.text:`${own?'You':uname(l.from)}: ${snippet(l)}`):(x.cid==='common'?'Everyone at SSB is here. Say hi.':'No messages yet');
     return `<button class="citem ${ui.cid===x.cid?'on':''}" data-act="openchat" data-c="${x.cid}" data-n="${esc(chatName(x.cid).toLowerCase())}">${chatAv(x.cid,48)}
       <span class="ci-t"><span class="ci-r"><b>${esc(chatName(x.cid))}</b><time>${l?fmtShort(l.ts):''}</time></span>
       <span class="ci-r"><span class="prev">${own?tickIcon(l,x.cid):''}<span class="txt">${esc(prev)}</span></span>${u?`<span class="ub">${u}</span>`:x.cid==='common'?'<span class="pinic" title="Always on top">📌</span>':''}</span></span></button>`};
@@ -482,11 +522,40 @@ function chatList(me){
     <div class="search"><input id="cq" placeholder="Search chats" autocomplete="off"></div>
     <div class="chats">${row(big)}${rest.map(row).join('')}${rest.length?'':`<div class="list-empty">Your groups show up here. <button class="link" data-act="tab" data-t="discover">Discover groups</button> or <button class="link" data-act="newgroup">create one</button>.</div>`}</div></section>`;
 }
+const SEND_SVG='<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 20.5 21 12 3 3.5l.01 6.6L15 12 3.01 13.9z" fill="currentColor"/></svg>';
+const EMOJI='😀 😃 😄 😁 😆 😅 😂 🤣 😊 😇 🙂 😉 😍 🥰 😘 😋 😜 🤪 😎 🤩 🥳 😏 😒 😔 😢 😭 😤 😡 🤯 😳 🥺 😱 🤔 🤫 🙄 😴 🤤 😷 🤒 🤑 🤠 😈 👻 💀 🤖 👽 💩 🙈 🙉 🙊 👍 👎 👏 🙌 🙏 🤝 💪 👌 ✌️ 🤞 🤟 🤙 👋 👀 🧠 ❤️ 🧡 💛 💚 💙 💜 🖤 🤍 💔 💯 🔥 ✨ ⭐ 🌟 💫 🌙 ☀️ 🪐 🌍 🚀 🛸 🌈 ⚡ 🎉 🎊 🎂 🎁 🏆 🥇 🏏 ⚽ 🏀 🏸 🎾 🏍️ 🚴 🏃 🧗 🎸 🎮 📸 🎬 🎧 📚 💻 💼 📈 💸 ☕ 🍕 🍔 🍟 🌮 🍜 🍩 🍺 🥤 ✈️ 🏖️ ⛰️ 🏕️ ✅ ❌ ❓ ❗ 💬 📌 🔗 ⏰ 📅 🎓'.split(' ');
+const MAX_MEDIA=10*1024*1024;
+const fmtSize=b=>!b?'':b<1024*1024?Math.max(1,Math.round(b/1024))+' KB':(b/1048576).toFixed(1)+' MB';
+function snippet(m){if(!m)return '';if(m.sys)return m.text;const k=m.kind||'text',md=m.media||{};
+  const lab={image:'📷 Photo',video:'🎥 Video',audio:'🎤 Voice message',file:'📄 '+(md.name||'File'),sticker:'🪐 Sticker'}[k];
+  return lab?(m.text?lab+': '+m.text:lab):m.text;}
+function linkify(t){return esc(t).replace(/https?:\/\/[^\s<]+/g,u=>{const trail=(u.match(/(?:[.,;:!?)\]]|&quot;|&#39;)+$/)||[''])[0];const core=u.slice(0,u.length-trail.length);
+  return `<a href="${core}" target="_blank" rel="noopener noreferrer">${core}</a>${trail}`;});}
+const safeMedia=u=>typeof u==='string'&&u.startsWith(MEDIA_BASE+'/media/')&&/^[a-f0-9]{32}$/.test(u.slice(MEDIA_BASE.length+7))?u:'';
+function mediaHTML(x){const md=x.media||{};
+  if(x.kind==='sticker'){const a=AV[md.k];return a?`<div class="stk" role="img" aria-label="${esc(a[1])} sticker">${a[2]}</div>`:'';}
+  const u=safeMedia(md.url);if(!u)return '<div class="mt"><i>Attachment unavailable</i></div>';
+  if(x.kind==='image')return `<a class="mimg" href="${u}" target="_blank" rel="noopener"><img src="${u}" alt="Photo" loading="lazy"${md.w&&md.h?` width="${+md.w}" height="${+md.h}"`:''}></a>`;
+  if(x.kind==='video')return `<video class="mvid" src="${u}" controls preload="metadata" playsinline></video>`;
+  if(x.kind==='audio')return `<audio class="maud" src="${u}" controls preload="metadata"></audio>`;
+  return `<a class="mfile" href="${u}" target="_blank" rel="noopener"><span class="fic">📄</span><span class="fmeta"><b>${esc(md.name||'File')}</b><small>${fmtSize(md.size)} · tap to open</small></span></a>`;}
+function quoteHTML(cid,id){const q=chatMsgs(cid).find(m=>m.id===id);
+  return `<div class="quote" data-act="jumpq" data-id="${esc(id)}"><b>${q?esc(q.from===st.session?'You':uname(q.from)):'Message'}</b><span>${q?esc(snippet(q)).slice(0,140):'Original message not available'}</span></div>`;}
+function replyBarHTML(cid){const q=chatMsgs(cid).find(m=>m.id===ui.replyTo);if(!q){ui.replyTo=null;return '';}
+  return `<div class="replybar"><div class="quote"><b>Replying to ${esc(q.from===st.session?'yourself':uname(q.from))}</b><span>${esc(snippet(q)).slice(0,140)}</span></div><button class="iconb" data-act="replycancel" aria-label="Cancel reply">✕</button></div>`;}
+function panelHTML(){const tab=ui.panel;
+  return `<div class="epanel"><div class="etabs"><button class="${tab==='emoji'?'on':''}" data-act="panel" data-p="emoji">😊 Emoji</button><button class="${tab==='stickers'?'on':''}" data-act="panel" data-p="stickers">🪐 Stickers</button><span class="sp"></span><button class="iconb" data-act="panel" data-p="" aria-label="Close">✕</button></div>
+  ${tab==='stickers'?`<div class="sgrid">${AVATARS.map(a=>`<button data-act="sticker" data-k="${a[0]}" aria-label="Send ${esc(a[1])} sticker">${a[2]}</button>`).join('')}</div>`:`<div class="egrid">${EMOJI.map(e=>`<button data-act="emo" data-e="${e}" aria-label="${e}">${e}</button>`).join('')}</div>`}</div>`;}
+function composerHTML(cid){
+  const top=(ui.replyTo?replyBarHTML(cid):'')+(ui.panel?panelHTML():'')+(ui.uploading?`<div class="upl">Uploading${ui.uploading>1?' '+ui.uploading+' files':''}…</div>`:'');
+  if(ui.rec)return top+`<div class="composer"><button class="cbtn" data-act="reccancel" aria-label="Cancel recording">✕</button><div class="recbar"><span class="recdot"></span>Recording <span id="rectime">0:00</span></div><button class="sendb" data-act="recsend" aria-label="Send voice message">${SEND_SVG}</button></div>`;
+  return top+`<div class="composer"><button class="cbtn" data-act="panel" data-p="${ui.panel?'':'emoji'}" aria-label="Emoji and stickers">😊</button><button class="cbtn" data-act="attach" aria-label="Attach photo, video or file">📎</button><textarea id="msg" rows="1" maxlength="2000" placeholder="Message" autocomplete="off" aria-label="Message ${esc(chatName(cid))}"></textarea><button class="cbtn" data-act="rec" aria-label="Record voice message">🎤</button><button class="sendb" data-act="send" aria-label="Send">${SEND_SVG}</button></div>`;}
 function msgHTML(x,cid){
   if(x.sys)return `<div class="sys">${esc(x.text)}</div>`;
   const own=x.from===st.session,u=st.users[x.from]||{name:x.from,avatar:'asteroid'},pin=isPinned(cid,x.id);
-  return `<div class="msg ${own?'mine':''}" data-mid="${x.id}">${own?'':av(u.avatar,30)}<div class="bub" role="button" tabindex="0" data-act="msgmenu" data-id="${x.id}" aria-label="Message options">
-    ${own?'':`<div class="mm"><b>${esc(u.name)}</b><span class="em">${esc(x.from)}</span></div>`}<div class="mt">${esc(x.text)}</div>
+  const k=x.kind||'text',media=k!=='text'?mediaHTML(x):'',text=x.text?`<div class="mt">${linkify(x.text)}</div>`:'';
+  return `<div class="msg ${own?'mine':''}" data-mid="${x.id}">${own?'':av(u.avatar,30)}<div class="bub${k==='sticker'?' stkb':''}${k!=='text'&&k!=='sticker'?' mediab':''}" role="button" tabindex="0" data-act="msgmenu" data-id="${x.id}" aria-label="Message options">
+    ${own?'':`<div class="mm"><b>${esc(u.name)}</b><span class="em">${esc(x.from)}</span></div>`}${x.replyTo?quoteHTML(cid,x.replyTo):''}${media}${text}
     <div class="mf">${pin?'<span title="Pinned">📌</span>':''}<time>${fmt(x.ts)}</time>${own?tickBtn(x,cid):''}</div></div></div>`;
 }
 function conv(me){
@@ -496,10 +565,10 @@ function conv(me){
   const sub=isG?`${n} member${n===1?'':'s'}, admin ${esc(uname(g.admin))}`:`Everyone at SSB, ${n} member${n===1?'':'s'}`;
   const pins=isM?pinsOf(cid):[];let pinbar='';
   if(pins.length){const i=ui.pinIdx%pins.length,pm=chatMsgs(cid).find(m=>m.id===pins[i].id);
-    pinbar=`<button class="pinbar" data-act="pinjump"><span aria-hidden="true">📌</span><span class="pt"><b>Pinned message${pins.length>1?` ${i+1} of ${pins.length}`:''}</b><small>${esc(uname(pm.from))}: ${esc(pm.text)}</small></span></button>`;}
+    pinbar=`<button class="pinbar" data-act="pinjump"><span aria-hidden="true">📌</span><span class="pt"><b>Pinned message${pins.length>1?` ${i+1} of ${pins.length}`:''}</b><small>${esc(uname(pm.from))}: ${esc(snippet(pm))}</small></span></button>`;}
   let body;
   if(isM) body=`<div class="msgs" id="msgs">${chatMsgs(cid).map(m=>msgHTML(m,cid)).join('')||`<div class="sys">${isG?'No messages yet. Say hi.':'Every verified member is in here. Start the conversation.'}</div>`}</div>
-    <div class="composer"><input id="msg" maxlength="2000" placeholder="Message" autocomplete="off" aria-label="Message ${esc(chatName(cid))}"><button class="sendb" data-act="send" aria-label="Send"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 20.5 21 12 3 3.5l.01 6.6L15 12 3.01 13.9z" fill="currentColor"/></svg></button></div>`;
+    ${composerHTML(cid)}`;
   else{const inv=g.invites.some(i=>i.email===me.email),req=g.requests.includes(me.email);
     body=`<div class="locked"><div><div style="font-size:44px">${g.emoji}</div><h3>${esc(g.name)} is invite-only</h3><p>Members join when the admin, ${esc(uname(g.admin))}, invites them.</p>
     ${inv?`<button class="btn ok" data-act="accept" data-g="${g.id}">Accept invite</button>`:req?'<button class="btn" disabled>Request sent</button>':`<button class="btn" data-act="request" data-g="${g.id}">Request an invite</button>`}</div></div>`;}
@@ -559,10 +628,11 @@ function modalHTML(me){
   if(ui.modal==='menu'){const {cid,id}=ui.menu;const m=chatMsgs(cid).find(x=>x.id===id);if(!m){ui.modal=null;return '';}
     const own=m.from===me.email,pinned=isPinned(cid,id);
     return `<div class="modal sheetwrap" data-act="closebg"><div class="box sheet" role="dialog" aria-label="Message options">
-      <div class="sheet-prev">${esc(m.text)}</div>
+      <div class="sheet-prev">${esc(snippet(m))}</div>
+      <button class="srow" data-act="reply"><span aria-hidden="true">↩️</span>Reply</button>
       <button class="srow" data-act="pin"><span aria-hidden="true">📌</span>${pinned?'Unpin message':'Pin message'}</button>
       ${own?`<button class="srow" data-act="info" data-c="${cid}" data-id="${id}"><span aria-hidden="true">ℹ️</span>Message info</button>`:''}
-      <button class="srow" data-act="copy"><span aria-hidden="true">📋</span>Copy text</button>
+      ${m.text?`<button class="srow" data-act="copy"><span aria-hidden="true">📋</span>Copy text</button>`:''}${m.media&&safeMedia(m.media.url)?`<a class="srow" href="${safeMedia(m.media.url)}" target="_blank" rel="noopener"><span aria-hidden="true">⬇️</span>Open / save</a>`:''}
       <button class="srow muted" data-act="closemodal">Cancel</button></div></div>`;}
   if(ui.modal==='info'){const m=chatMsgs(ui.info.cid).find(x=>x.id===ui.info.id);if(!m){ui.modal=null;return '';}
     const rd=st.reads[ui.info.cid]||{};const R=[],D=[],W=[];
@@ -625,6 +695,53 @@ function setTab(t){ui.tab=t;ui.mobileMain=false;ui.showMembers=false;ui.confirmD
 /* ---------- actions ---------- */
 async function sendCode(email,el){if(el)el.disabled=true;const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true,emailRedirectTo:location.origin+location.pathname}});if(el)el.disabled=false;
   if(error){const m=error.message||'';return /rate|seconds|security purposes/i.test(m)?'Too many requests. Wait a minute, then try again.':/not authorized/i.test(m)?'Email sending isn\'t set up yet (custom SMTP is needed).':/database error/i.test(m)?`Only @${DOMAINS[0]} emails can join.`:m;}return null;}
+function copyText(t){const ok=()=>toast('Copied');
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(t).then(ok,()=>legacyCopy(t));}else legacyCopy(t);}
+function legacyCopy(t){const ta=document.createElement('textarea');ta.value=t;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;top:0;left:0;opacity:0';document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,t.length);
+  let done=false;try{done=document.execCommand('copy');}catch(e){}ta.remove();toast(done?'Copied':'Couldn\'t copy. Long-press the text to copy it.');}
+function canSend(cid){const me=meU();if(!me)return false;return cid==='common'||!!(st.groups[cid]&&st.groups[cid].members.includes(me.email));}
+let _picker=null;
+function filePicker(){if(_picker)return _picker;_picker=document.createElement('input');_picker.type='file';_picker.multiple=true;_picker.style.display='none';
+  _picker.addEventListener('change',()=>{const f=[..._picker.files];_picker.value='';handleFiles(f);});document.body.appendChild(_picker);return _picker;}
+async function compressImage(file){
+  if(!/^image\/(jpeg|png|webp|heic|heif)$/i.test(file.type)||!window.createImageBitmap)return {blob:file,type:file.type};
+  try{const bmp=await createImageBitmap(file);const sc=Math.min(1,1600/Math.max(bmp.width,bmp.height));const w=Math.round(bmp.width*sc),h=Math.round(bmp.height*sc);
+    const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(bmp,0,0,w,h);
+    const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',0.82));if(blob&&(blob.size<file.size||/heic|heif/i.test(file.type)))return {blob,type:'image/jpeg',w,h};return {blob:file,type:file.type,w:bmp.width,h:bmp.height};}
+  catch(e){return {blob:file,type:file.type};}}
+async function upload(blob,name,type){const {data}=await sb.auth.getSession();const tok=data.session&&data.session.access_token;if(!tok)throw new Error('Please log in again.');
+  let r;try{r=await fetch(MEDIA_BASE+'/media',{method:'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':type||'application/octet-stream','X-Name':encodeURIComponent(name||'file')},body:blob});}
+  catch(e){throw new Error('Upload failed. Check your connection and try again.');}
+  if(!r.ok)throw new Error(r.status===413?'That file is over 10 MB.':'Upload failed. Try again.');return r.json();}
+async function sendMedia(kind,blob,name,type,extra,caption){const cid=ui.cid,me=meU();if(!canSend(cid)||!me)return;
+  if(blob.size>MAX_MEDIA)return toast(`"${name}" is over 10 MB, so it can't be sent.`);
+  const rt=ui.replyTo||null;ui.replyTo=null;ui.uploading=(ui.uploading||0)+1;render();
+  try{const res=await upload(blob,name,type);
+    const {data,error}=await sb.from('messages').insert({group_id:cid==='common'?null:cid,sender_id:me.id,body:caption||'',kind,media:{url:res.url,name,size:blob.size,mime:type,...(extra||{})},reply_to:rt}).select().single();
+    if(error)throw error;if(!R.messages.some(m=>m.id===data.id))R.messages.push(data);ui.forceBottom=true;build();}
+  catch(e){toast(errText(e));}finally{ui.uploading=Math.max(0,(ui.uploading||1)-1);render();}}
+async function handleFiles(files){if(!files||!files.length)return;if(!canSend(ui.cid))return;
+  if(files.length>10){toast('You can send up to 10 files at a time.');files=files.slice(0,10);}
+  const t=$('msg');let caption=files.length===1&&t?t.value.trim():'';if(caption&&t){t.value='';t.dispatchEvent(new Event('input',{bubbles:true}));}
+  for(const f of files){const type=f.type||'application/octet-stream',name=f.name||'file';
+    if(type.startsWith('image/')&&type!=='image/svg+xml'){const c=await compressImage(f);const nm=c.type==='image/jpeg'?name.replace(/\.(png|webp|heic|heif)$/i,'.jpg'):name;await sendMedia('image',c.blob,nm,c.type,c.w?{w:c.w,h:c.h}:{},caption);}
+    else if(type.startsWith('video/'))await sendMedia('video',f,name,type,{},caption);
+    else if(type.startsWith('audio/'))await sendMedia('audio',f,name,type,{},caption);
+    else await sendMedia('file',f,name,type,{},caption);
+    caption='';}}
+let rec=null,recChunks=[],recStart=0,recTimer=null;
+async function startRec(){if(!canSend(ui.cid))return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia||!window.MediaRecorder)return toast('Voice messages aren\'t supported in this browser.');
+  let stream;try{stream=await navigator.mediaDevices.getUserMedia({audio:true});}catch(e){return toast('Allow microphone access to record a voice message.');}
+  const type=['audio/mp4','audio/webm;codecs=opus','audio/webm'].find(t=>MediaRecorder.isTypeSupported&&MediaRecorder.isTypeSupported(t))||'';
+  try{rec=type?new MediaRecorder(stream,{mimeType:type}):new MediaRecorder(stream);}catch(e){stream.getTracks().forEach(t=>t.stop());return toast('Couldn\'t start recording.');}
+  recChunks=[];rec.ondataavailable=e=>{if(e.data&&e.data.size)recChunks.push(e.data);};rec.start(1000);recStart=Date.now();ui.rec=true;ui.panel=null;render();
+  clearInterval(recTimer);recTimer=setInterval(()=>{const s2=Math.floor((Date.now()-recStart)/1000),el=$('rectime');if(el)el.textContent=Math.floor(s2/60)+':'+String(s2%60).padStart(2,'0');if(s2>=300)stopRec(true);},500);}
+function stopRec(send){if(!rec)return;const r=rec,dur=Math.round((Date.now()-recStart)/1000);rec=null;clearInterval(recTimer);ui.rec=false;
+  r.onstop=()=>{r.stream.getTracks().forEach(t=>t.stop());render();if(!send)return;const type=((r.mimeType||'audio/webm').split(';')[0])||'audio/webm';
+    const blob=new Blob(recChunks,{type});if(blob.size<800||dur<1)return toast('That recording was too short.');
+    sendMedia('audio',blob,'voice-message.'+(type.includes('mp4')?'m4a':'webm'),type,{dur},'');};
+  try{r.stop();}catch(e){render();}}
 async function act(a,d,el){
   const meE=st.session,me=meU(),g=d.g?st.groups[d.g]:st.groups[ui.cid];
   const run=async(fn,keys)=>{if(el)el.disabled=true;try{const r=await fn();if(r&&r.error)throw r.error;if(keys)await refresh(keys);return true;}catch(e){toast(errText(e));return false;}finally{if(el&&el.isConnected)el.disabled=false;}};
@@ -648,13 +765,25 @@ async function act(a,d,el){
     case 'back':ui.mobileMain=false;ui.showMembers=false;return render();
     case 'members':ui.showMembers=!ui.showMembers;ui.confirmDel=null;return render();
     case 'send':{const tx=val('msg');if(!tx)return;const cid=ui.cid;if(cid!=='common'&&!(g&&g.members.includes(meE)))return;$('msg').value='';
-      const {data,error}=await sb.from('messages').insert({group_id:cid==='common'?null:cid,sender_id:me.id,body:tx}).select().single();
+      const rt=ui.replyTo||null;const {data,error}=await sb.from('messages').insert({group_id:cid==='common'?null:cid,sender_id:me.id,body:tx,reply_to:rt}).select().single();
       if(error){if($('msg')&&!$('msg').value)$('msg').value=tx;return toast(errText(error));}
-      if(!R.messages.some(m=>m.id===data.id))R.messages.push(data);ui.forceBottom=true;build();render();return;}
-    case 'msgmenu':ui.modal='menu';ui.menu={cid:ui.cid,id:d.id};return render();
+      ui.replyTo=null;if(!R.messages.some(m=>m.id===data.id))R.messages.push(data);ui.forceBottom=true;build();render();if(!isMobile())$('msg')?.focus();return;}
+    case 'msgmenu':if(String(window.getSelection?window.getSelection():''))return;ui.modal='menu';ui.menu={cid:ui.cid,id:d.id};return render();
+    case 'reply':ui.replyTo=ui.menu.id;ui.modal=null;render();if(!isMobile())$('msg')?.focus();return;
+    case 'replycancel':ui.replyTo=null;return render();
+    case 'jumpq':{const el2=document.querySelector(`[data-mid="${CSS.escape(d.id)}"]`);if(!el2)return toast('That message is no longer in this chat.');el2.scrollIntoView({block:'center',behavior:'smooth'});el2.classList.add('flash');setTimeout(()=>el2.classList.remove('flash'),1500);return;}
+    case 'panel':ui.panel=d.p||null;return render();
+    case 'emo':{const t=$('msg');if(!t)return;const a1=t.selectionStart??t.value.length,b1=t.selectionEnd??a1;t.setRangeText(d.e,a1,b1,'end');t.dispatchEvent(new Event('input',{bubbles:true}));if(!isMobile())t.focus();return;}
+    case 'sticker':{ui.panel=null;const cid=ui.cid;if(!canSend(cid))return;const rt=ui.replyTo||null;ui.replyTo=null;render();
+      const {data,error}=await sb.from('messages').insert({group_id:cid==='common'?null:cid,sender_id:me.id,body:'',kind:'sticker',media:{k:d.k},reply_to:rt}).select().single();
+      if(error)return toast(errText(error));if(!R.messages.some(m=>m.id===data.id))R.messages.push(data);ui.forceBottom=true;build();render();return;}
+    case 'attach':filePicker().click();return;
+    case 'rec':return startRec();
+    case 'reccancel':return stopRec(false);
+    case 'recsend':return stopRec(true);
     case 'pin':{const {cid,id}=ui.menu,pinned=isPinned(cid,id);ui.modal=null;ui.pinIdx=0;render();
       return run(()=>pinned?sb.from('pins').delete().eq('message_id',id):sb.from('pins').insert({message_id:id}),['pins','messages']);}
-    case 'copy':{const m=chatMsgs(ui.menu.cid).find(x=>x.id===ui.menu.id);try{navigator.clipboard?.writeText(m.text).catch(()=>{});}catch(e){}ui.modal=null;toast('Copied');return render();}
+    case 'copy':{const m=chatMsgs(ui.menu.cid).find(x=>x.id===ui.menu.id);ui.modal=null;render();if(m)copyText(m.text);return;}
     case 'info':ui.modal='info';ui.info={cid:d.c,id:d.id};return render();
     case 'pinjump':{const pins=pinsOf(ui.cid);if(!pins.length)return;const i=ui.pinIdx%pins.length,target=pins[i].id;ui.pinIdx=(i+1)%pins.length;render();
       const el2=document.querySelector(`[data-mid="${target}"]`);if(el2){el2.scrollIntoView({block:'center',behavior:'smooth'});el2.classList.add('flash');setTimeout(()=>el2.classList.remove('flash'),1500);}return;}
@@ -688,6 +817,7 @@ async function act(a,d,el){
   }
 }
 document.addEventListener('click',e=>{
+  if(e.target.closest('a[href],video,audio'))return;
   const t=e.target.closest('[data-act]');if(!t)return;
   if(t.dataset.act==='closebg'){if(e.target===t){ui.modal=null;render();}return;}
   e.preventDefault();act(t.dataset.act,t.dataset,t);
@@ -695,18 +825,25 @@ document.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&ui.modal){ui.modal=null;return render();}
   if(e.key!=='Enter'||e.shiftKey||e.isComposing)return;
+  if(e.target.id==='msg'&&isMobile())return;
   if(e.target.classList?.contains('bub')){e.preventDefault();return act('msgmenu',e.target.dataset);}
   const map={msg:'send',em:'sendotp',otp:'verify',invEm:'invite',gname:'create',nm:'finish',pname:'saveprofile'};
   const a=map[e.target.id];if(a){e.preventDefault();const btn=document.querySelector(`[data-act="${a}"]`);act(a,{},btn);}
 });
 document.addEventListener('change',e=>{if(e.target.id==='dirrole')filterDir();});
 document.addEventListener('input',e=>{
+  if(e.target.id==='msg'){const t=e.target;t.style.height='auto';t.style.height=Math.min(t.scrollHeight,140)+'px';}
   if(e.target.id==='batch'){const c=cleanBatch(e.target.value);if(c!==e.target.value)e.target.value=c;}
   if(e.target.id==='dirq')filterDir();
   if(e.target.id==='cq')filterChats();
 });
 function filterChats(){const q=val('cq').toLowerCase();document.querySelectorAll('.citem').forEach(c=>{c.style.display=!q||c.dataset.n.includes(q)?'':'none';});}
 function filterDir(){const q=val('dirq').toLowerCase(),r=$('dirrole')?.value||'';document.querySelectorAll('.person').forEach(p=>{p.style.display=(!q||p.dataset.s.includes(q))&&(!r||p.dataset.r===r)?'':'none';});}
+document.addEventListener('paste',e=>{if(!e.target||e.target.id!=='msg')return;const cd=e.clipboardData;if(!cd)return;
+  const files=[...(cd.files||[])];if(files.length){e.preventDefault();handleFiles(files);}});
+document.addEventListener('dragover',e=>{if(e.target.closest&&e.target.closest('.conv')&&e.dataTransfer&&[...e.dataTransfer.types].includes('Files'))e.preventDefault();});
+document.addEventListener('drop',e=>{const c=e.target.closest&&e.target.closest('.conv');if(!c||!e.dataTransfer||!e.dataTransfer.files.length)return;e.preventDefault();handleFiles([...e.dataTransfer.files]);});
+document.addEventListener('mousedown',e=>{if(e.target.closest('.egrid button'))e.preventDefault();});
 let hiddenAt=0;
 document.addEventListener('visibilitychange',()=>{if(document.hidden){hiddenAt=Date.now();return;}liveWake();if(booted&&Date.now()-hiddenAt>30000)refreshSince();});
 // ticks: re-check who has received/read only while one of my recent messages in the open chat is still waiting
