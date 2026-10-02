@@ -265,7 +265,7 @@ const BB_SVG=S('#1a0f2b',`<polygon points="${burst(32,32,14,30,12)}" fill="#ff6f
 
 /* ---------- backend (paste your two Supabase values here) ---------- */
 const SUPABASE_URL='https://oeocdhkoxavjsxypwcjr.supabase.co';
-const SUPABASE_KEY='sb_publishable_IxWmSzsSg6pqhZRzaD7ZCw_wXqNFROZ';
+const SUPABASE_KEY='PASTE_YOUR_PUBLISHABLE_KEY_HERE';
 const CONFIGURED=/^https:\/\//.test(SUPABASE_URL)&&!SUPABASE_KEY.startsWith('PASTE');
 const sb=CONFIGURED&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 const T=s=>s?Date.parse(String(s).replace(/(\.\d{3})\d+/,'$1')):0;
@@ -329,7 +329,47 @@ function build(){
 // live updates
 const pending=new Set();let pendT=null;
 function queueRefresh(k){pending.add(k);clearTimeout(pendT);pendT=setTimeout(()=>{const ks=[...pending];pending.clear();refresh(ks);},250);}
-function subscribe(){
+// ---------- live updates via the Orbit relay (Cloudflare, free, 500+ people online) ----------
+const LIVE_URL='wss://orbit-live.dilipbv21.workers.dev/live';
+const LIVE_ON=!/dilipbv21/.test(LIVE_URL);
+let liveWs=null,liveTimer=null,liveBackoff=1000,livePing=null,liveStop=true;
+function subscribe(){if(!LIVE_ON)return subscribeSupabase();liveStop=false;liveConnect(false);}
+async function liveConnect(isRetry){
+  clearTimeout(liveTimer);if(liveStop||!AUTH)return;
+  let tok=null;try{const {data}=await sb.auth.getSession();tok=data.session&&data.session.access_token;}catch(e){}
+  if(!tok)return liveRetry();
+  let ws;try{ws=new WebSocket(LIVE_URL+'?token='+encodeURIComponent(tok));}catch(e){return liveRetry();}
+  liveWs=ws;
+  ws.onopen=()=>{liveBackoff=1000;clearInterval(livePing);livePing=setInterval(()=>{try{ws.send('ping');}catch(e){}},25000);if(isRetry)refreshSince();};
+  ws.onmessage=e=>{if(e.data==='pong')return;let ev;try{ev=JSON.parse(e.data);}catch(_){return;}onLive(ev);};
+  ws.onclose=()=>{clearInterval(livePing);if(liveWs===ws){liveWs=null;liveRetry();}};
+}
+// reconnect with growing, randomised delays so 500 phones don't all reconnect in the same second
+function liveRetry(){if(liveStop)return;clearTimeout(liveTimer);liveTimer=setTimeout(()=>liveConnect(true),liveBackoff+Math.random()*1500);liveBackoff=Math.min(liveBackoff*2,30000);}
+function liveDisconnect(){liveStop=true;clearTimeout(liveTimer);clearInterval(livePing);const w=liveWs;liveWs=null;if(w){try{w.close();}catch(e){}}}
+function liveWake(){if(LIVE_ON&&!liveStop&&(!liveWs||liveWs.readyState>1)){liveBackoff=1000;liveConnect(true);}}
+const gmsgQ=new Set();let gmsgT=null;
+async function fetchGroupMsgs(){const ids=[...gmsgQ];gmsgQ.clear();if(!ids.length)return;
+  const {data,error}=await sb.from('messages').select('*').in('id',ids);if(error)return;
+  (data||[]).forEach(m=>{if(!R.messages.some(x=>x.id===m.id))R.messages.push(m);});build();render();}
+async function loadGroup(g){const [m,p]=await Promise.all([sb.from('messages').select('*').eq('group_id',g).order('created_at',{ascending:false}).limit(200),sb.from('pins').select('*')]);
+  if(!m.error)(m.data||[]).forEach(x=>{if(!R.messages.some(y=>y.id===x.id))R.messages.push(x);});if(!p.error)R.pins=p.data||[];build();render();}
+function applyRow(ev){
+  const key={groups:['id'],profiles:['id'],group_members:['group_id','user_id']}[ev.table],arr={groups:'groups',profiles:'profiles',group_members:'members'}[ev.table];
+  if(!key)return;const same=(a,b)=>a&&b&&key.every(k=>a[k]===b[k]);
+  if(ev.op==='DELETE')R[arr]=R[arr].filter(x=>!same(x,ev.old));
+  else{const i=R[arr].findIndex(x=>same(x,ev.row));if(i>=0)R[arr][i]={...R[arr][i],...ev.row};else R[arr].push(ev.row);
+    if(ev.table==='group_members'&&ev.op==='INSERT'&&ev.row.user_id===AUTH.id)loadGroup(ev.row.group_id);}
+  build();render();}
+function onLive(ev){if(!AUTH)return;
+  if(ev.t==='msg'){const m=ev.row;if(!R.messages.some(x=>x.id===m.id))R.messages.push(m);if(m.sender_id&&!R.profiles.some(x=>x.id===m.sender_id))queueRefresh('profiles');build();render();return;}
+  if(ev.t==='gmsg'){if(R.messages.some(x=>x.id===ev.id))return;if(!R.members.some(x=>x.group_id===ev.g&&x.user_id===AUTH.id))return;gmsgQ.add(ev.id);clearTimeout(gmsgT);gmsgT=setTimeout(fetchGroupMsgs,150);return;}
+  if(ev.t==='del'){R.messages=R.messages.filter(m=>m.id!==ev.id);build();render();return;}
+  if(ev.t==='row'){applyRow(ev);return;}
+  if(ev.t==='refetch'){if(ev.k==='pins'){queueRefresh('pins');return;}
+    if(ev.mine||(ev.g&&R.groups.some(g=>g.id===ev.g&&g.admin_id===AUTH.id)))queueRefresh(ev.k);}
+}
+function subscribeSupabase(){
   if(channel)sb.removeChannel(channel);channel=sb.channel('orbit-live');
   LIVE_TABLES.forEach(t=>channel.on('postgres_changes',{event:'*',schema:'public',table:t},p=>{
     if(t==='messages'&&p.eventType==='DELETE'){R.messages=R.messages.filter(m=>m.id!==p.old.id);build();render();return;}
@@ -577,7 +617,7 @@ async function boot(user){
   if(!R.profiles.some(p=>p.id===AUTH.id)){auth.step='profile';auth.email=AUTH.email;renderAuth();return;}
   booted=true;subscribe();openConv('common');render();
 }
-function signedOut(){try{const k=CK();if(k)localStorage.removeItem(k);}catch(e){}AUTH=null;booted=false;if(channel){sb.removeChannel(channel);channel=null;}R=EMPTY();build();auth={step:'email',email:'',avatar:'moon'};ui.modal=null;renderAuth();}
+function signedOut(){liveDisconnect();try{const k=CK();if(k)localStorage.removeItem(k);}catch(e){}AUTH=null;booted=false;if(channel){sb.removeChannel(channel);channel=null;}R=EMPTY();build();auth={step:'email',email:'',avatar:'moon'};ui.modal=null;renderAuth();}
 /* ---------- navigation ---------- */
 function openConv(cid){ui.tab='chats';ui.cid=cid;ui.mobileMain=true;ui.showMembers=false;ui.confirmDel=null;ui.pinIdx=0;ui.forceBottom=true;}
 function setTab(t){ui.tab=t;ui.mobileMain=false;ui.showMembers=false;ui.confirmDel=null;}
@@ -668,7 +708,7 @@ document.addEventListener('input',e=>{
 function filterChats(){const q=val('cq').toLowerCase();document.querySelectorAll('.citem').forEach(c=>{c.style.display=!q||c.dataset.n.includes(q)?'':'none';});}
 function filterDir(){const q=val('dirq').toLowerCase(),r=$('dirrole')?.value||'';document.querySelectorAll('.person').forEach(p=>{p.style.display=(!q||p.dataset.s.includes(q))&&(!r||p.dataset.r===r)?'':'none';});}
 let hiddenAt=0;
-document.addEventListener('visibilitychange',()=>{if(document.hidden){hiddenAt=Date.now();return;}if(booted&&Date.now()-hiddenAt>30000)refreshSince();});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){hiddenAt=Date.now();return;}liveWake();if(booted&&Date.now()-hiddenAt>30000)refreshSince();});
 // ticks: re-check who has received/read only while one of my recent messages in the open chat is still waiting
 setInterval(()=>{if(!booted||document.hidden)return;try{const cid=openChat();if(!cid)return;const me=st.session,now=Date.now();
   const waiting=chatMsgs(cid).some(m=>!m.sys&&m.from===me&&now-m.ts<15*60000&&tickState(m,cid)<3);
