@@ -265,7 +265,7 @@ const BB_SVG=S('#1a0f2b',`<polygon points="${burst(32,32,14,30,12)}" fill="#ff6f
 
 /* ---------- backend (paste your two Supabase values here) ---------- */
 const SUPABASE_URL='https://oeocdhkoxavjsxypwcjr.supabase.co';
-const SUPABASE_KEY='PASTE_YOUR_PUBLISHABLE_KEY_HERE';
+const SUPABASE_KEY='sb_publishable_IxWmSzsSg6pqhZRzaD7ZCw_wXqNFROZ';
 const CONFIGURED=/^https:\/\//.test(SUPABASE_URL)&&!SUPABASE_KEY.startsWith('PASTE');
 const sb=CONFIGURED&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 const T=s=>s?Date.parse(String(s).replace(/(\.\d{3})\d+/,'$1')):0;
