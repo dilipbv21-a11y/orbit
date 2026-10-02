@@ -264,7 +264,7 @@ const av=(k,size=36)=>{const a=AV[k]||AVATARS[0];return `<span class="av" style=
 const BB_SVG=S('#1a0f2b',`<polygon points="${burst(32,32,14,30,12)}" fill="#ff6fb5"/><polygon points="${burst(32,32,10,21,9)}" fill="#ffb347"/><polygon points="${burst(32,32,7,13,6)}" fill="#fff3a8"/><circle cx="32" cy="32" r="4" fill="#fff"/>`);
 
 /* ---------- backend (paste your two Supabase values here) ---------- */
-const SUPABASE_URL='PASTE_YOUR_PROJECT_URL_HERE';
+const SUPABASE_URL='https://oeocdhkoxavjsxypwcjr.supabase.co';
 const SUPABASE_KEY='PASTE_YOUR_PUBLISHABLE_KEY_HERE';
 const CONFIGURED=/^https:\/\//.test(SUPABASE_URL)&&!SUPABASE_KEY.startsWith('PASTE');
 const sb=CONFIGURED&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
