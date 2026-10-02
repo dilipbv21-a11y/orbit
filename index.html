@@ -190,6 +190,10 @@ label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
 .field-hint{font-size:12px;color:var(--muted);margin-top:4px}
 .divider{border:0;border-top:1px solid var(--line);margin:18px 0 4px}
 
+#toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translate(-50%,20px);background:var(--text);color:var(--panel);padding:10px 16px;border-radius:12px;font-size:14px;max-width:min(92vw,420px);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:80}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+.btn[disabled],.link[disabled]{opacity:.55;cursor:default}
 @media (max-width:1100px){
   .shell.chat-mode.with-members{grid-template-columns:68px 320px minmax(0,1fr)}
   .members{position:fixed;top:0;right:0;bottom:0;width:min(340px,100%);z-index:30;box-shadow:-20px 0 50px -20px #0007;padding-top:calc(16px + env(safe-area-inset-top,0px))}
@@ -214,10 +218,10 @@ label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
 </head>
 <body>
 <div id="app"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js"></script>
 <script>
 /* ---------- config ---------- */
 const DOMAINS=['ssb.scaler.com'];
-const KEY='orbit-ssb-v3';
 const MAIN_CHAT='Big Bang';
 const MAXB=new Date().getFullYear()+2;   // batch years allowed: 2020 to current year + 2
 const MAX_PINS=3;
@@ -259,16 +263,65 @@ const av=(k,size=36)=>{const a=AV[k]||AVATARS[0];return `<span class="av" style=
 
 const BB_SVG=S('#1a0f2b',`<polygon points="${burst(32,32,14,30,12)}" fill="#ff6fb5"/><polygon points="${burst(32,32,10,21,9)}" fill="#ffb347"/><polygon points="${burst(32,32,7,13,6)}" fill="#fff3a8"/><circle cx="32" cy="32" r="4" fill="#fff"/>`);
 
-/* ---------- state ---------- */
-let st;
-function seed(){return {session:null,users:{},groups:{},common:{messages:[],pins:[]},reads:{}};}
-function load(){let x=null;try{const r=localStorage.getItem(KEY);if(r)x=JSON.parse(r);}catch(e){}
-  st=Object.assign(seed(),x||{});st.common.pins=st.common.pins||[];Object.values(st.groups).forEach(g=>{g.pins=g.pins||[];});}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
-load();
-let auth={step:'email',email:'',otp:'',avatar:'moon'};
+/* ---------- backend (paste your two Supabase values here) ---------- */
+const SUPABASE_URL='PASTE_YOUR_PROJECT_URL_HERE';
+const SUPABASE_KEY='PASTE_YOUR_PUBLISHABLE_KEY_HERE';
+const CONFIGURED=/^https:\/\//.test(SUPABASE_URL)&&!SUPABASE_KEY.startsWith('PASTE');
+const sb=CONFIGURED&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
+const T=s=>s?Date.parse(String(s).replace(/(\.\d{3})\d+/,'$1')):0;
+const ISO=ms=>new Date(ms).toISOString();
+let AUTH=null,booted=false,channel=null;
+const EMPTY=()=>({profiles:[],groups:[],members:[],invites:[],requests:[],messages:[],pins:[],reads:[]});
+let R=EMPTY();
+let st={session:null,users:{},groups:{},common:{messages:[],pins:[]},reads:{}};
+const QUERIES={
+  profiles:()=>sb.from('profiles').select('*'),
+  groups:()=>sb.from('groups').select('*'),
+  members:()=>sb.from('group_members').select('*'),
+  invites:()=>sb.from('group_invites').select('*'),
+  requests:()=>sb.from('join_requests').select('*'),
+  messages:()=>sb.from('messages').select('*').order('created_at',{ascending:false}).limit(1000),
+  pins:()=>sb.from('pins').select('*'),
+  reads:()=>sb.from('chat_reads').select('*'),
+};
+const TABLE_KEY={profiles:'profiles',groups:'groups',group_members:'members',group_invites:'invites',join_requests:'requests',messages:'messages',pins:'pins',chat_reads:'reads'};
+const ALL=Object.keys(QUERIES);
+async function fetchKeys(keys){const res=await Promise.all(keys.map(k=>QUERIES[k]()));res.forEach((r,i)=>{if(r.error)throw r.error;R[keys[i]]=r.data||[];});}
+async function refresh(keys){try{await fetchKeys(keys);build();render();}catch(e){toast(errText(e));}}
+// turns database rows into the shape the screens use
+function build(){
+  const byId={},users={};
+  R.profiles.forEach(p=>{const e=(p.email||'').toLowerCase();byId[p.id]=e;users[e]={id:p.id,email:e,name:p.name,avatar:p.avatar,role:p.role,batch:String(p.batch),since:T(p.created_at),lastActive:T(p.last_seen)};});
+  const groups={};
+  R.groups.forEach(g=>{groups[g.id]={id:g.id,name:g.name,emoji:g.emoji,cat:g.category,desc:g.description,admin:byId[g.admin_id],members:[],joined:{},invites:[],requests:[],messages:[],pins:[],created:T(g.created_at)};});
+  R.members.forEach(m=>{const g=groups[m.group_id],e=byId[m.user_id];if(g&&e){g.members.push(e);g.joined[e]=T(m.joined_at);}});
+  R.invites.forEach(i=>{const g=groups[i.group_id];if(g)g.invites.push({email:i.email.toLowerCase(),by:byId[i.invited_by],ts:T(i.created_at)});});
+  R.requests.forEach(r=>{const g=groups[r.group_id],e=byId[r.user_id];if(g&&e)g.requests.push(e);});
+  const common={messages:[],pins:[]};
+  [...R.messages].sort((a,b)=>T(a.created_at)-T(b.created_at)).forEach(m=>{
+    const tgt=m.group_id?groups[m.group_id]:common;if(!tgt)return;const ts=T(m.created_at),from=m.sender_id?byId[m.sender_id]:null;
+    let rcpt=[];if(!m.is_system&&from)rcpt=m.group_id?tgt.members.filter(e=>e!==from&&(tgt.joined[e]||0)<=ts):Object.values(users).filter(u=>u.email!==from&&u.since<=ts).map(u=>u.email);
+    tgt.messages.push({id:m.id,from,text:m.body,ts,sys:m.is_system,rcpt});});
+  R.pins.forEach(p=>{const tgt=p.group_id?groups[p.group_id]:common;if(tgt)tgt.pins.push({id:p.message_id,by:byId[p.pinned_by],ts:T(p.created_at)});});
+  const reads={};R.reads.forEach(r=>{const cid=r.chat_key==='bigbang'?'common':r.chat_key,e=byId[r.user_id];if(e)(reads[cid]=reads[cid]||{})[e]=T(r.last_read_at);});
+  st={session:AUTH?AUTH.email:null,users,groups,common,reads};
+}
+// live updates
+const pending=new Set();let pendT=null;
+function queueRefresh(k){pending.add(k);clearTimeout(pendT);pendT=setTimeout(()=>{const ks=[...pending];pending.clear();refresh(ks);},250);}
+function subscribe(){
+  if(channel)sb.removeChannel(channel);channel=sb.channel('orbit-live');
+  Object.keys(TABLE_KEY).forEach(t=>channel.on('postgres_changes',{event:'*',schema:'public',table:t},p=>{
+    if(t==='messages'&&p.eventType==='INSERT'){if(!R.messages.some(m=>m.id===p.new.id))R.messages.push(p.new);build();render();return;}
+    if(t==='profiles'&&p.eventType==='UPDATE'){const i=R.profiles.findIndex(x=>x.id===p.new.id);if(i>=0){R.profiles[i]=p.new;build();render();return;}}
+    if(t==='chat_reads'&&p.eventType!=='DELETE'){const i=R.reads.findIndex(x=>x.user_id===p.new.user_id&&x.chat_key===p.new.chat_key);if(i>=0)R.reads[i]=p.new;else R.reads.push(p.new);build();render();return;}
+    queueRefresh(TABLE_KEY[t]);}));
+  channel.subscribe();
+}
+function toast(msg){let t=$('toast');if(!t){t=document.createElement('div');t.id='toast';t.setAttribute('role','status');document.body.appendChild(t);}t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),4000);}
+function errText(e){const m=(e&&(e.message||e.error_description))||String(e);if(e?.code==='23505'||/duplicate key/i.test(m))return 'That already exists.';return m;}
+let auth={step:CONFIGURED?'loading':'config',email:'',avatar:'moon'};
 let ui={tab:'chats',cid:'common',mobileMain:true,showMembers:false,modal:null,tmpAv:null,tmpEmo:'🏏',confirmDel:null,pinIdx:0,menu:null,info:null,forceBottom:true};
-
 /* ---------- helpers ---------- */
 const $=id=>document.getElementById(id);
 const val=id=>($(id)?.value||'').trim();
@@ -287,12 +340,6 @@ function fmt(ts){const d=new Date(ts),t=d.toLocaleTimeString([], {hour:'numeric'
 function fmtShort(ts){const d=new Date(ts);return d.toDateString()===new Date().toDateString()?d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):d.toLocaleDateString([], {day:'numeric',month:'short'});}
 function cleanBatch(v){v=String(v).replace(/\D/g,'').slice(0,4);const rule=[/2/,/0/,/[23]/];let out='';for(let i=0;i<v.length;i++){if(i<3&&!rule[i].test(v[i]))break;out+=v[i];}return out;}
 const batchOk=v=>/^20[23]\d$/.test(v)&&+v>=2020&&+v<=MAXB;
-function sysMsg(cid,text){chatMsgs(cid).push({id:rid(),sys:true,text,ts:Date.now()});}
-function addMember(g,email){
-  if(!g.members.includes(email))g.members.push(email);
-  g.invites=g.invites.filter(i=>i.email!==email);g.requests=g.requests.filter(r=>r!==email);
-  sysMsg(g.id,`${uname(email)} joined the group`);
-}
 function pinsOf(cid){const o=chatObj(cid);if(!o)return[];const ids=new Set(chatMsgs(cid).map(m=>m.id));return (o.pins||[]).filter(p=>ids.has(p.id)).sort((a,b)=>b.ts-a.ts);}
 const isPinned=(cid,id)=>(chatObj(cid)?.pins||[]).some(p=>p.id===id);
 
@@ -308,15 +355,20 @@ function unread(cid){const me=st.session,rd=(st.reads[cid]||{})[me]||0;return ch
 const totalUnread=()=>unread('common')+mine().reduce((s,g)=>s+unread(g.id),0);
 function openChat(){if(ui.tab!=='chats')return null;if(isMobile()&&!ui.mobileMain)return null;
   if(ui.cid==='common')return 'common';return st.groups[ui.cid]?.members.includes(st.session)?ui.cid:null;}
-// marks this user online (delivered) and the open chat as read; saves only on real change so tabs don't ping-pong
-function touch(){const me=meU();if(!me)return;let ch=false;const now=Date.now();
+// marks you as online (delivered) and the open chat as read, using the later of your clock and the newest message
+let touchT=null;
+function scheduleTouch(){clearTimeout(touchT);touchT=setTimeout(doTouch,800);}
+async function doTouch(){const me=meU();if(!me||!sb)return;
   const cids=['common',...mine().map(g=>g.id)];
   const latest=Math.max(0,...cids.flatMap(c=>chatMsgs(c).filter(m=>(m.rcpt||[]).includes(me.email)).map(m=>m.ts)));
-  if(!me.lastActive||latest>me.lastActive){me.lastActive=now;ch=true;}
-  const cid=openChat();if(cid){const ms=chatMsgs(cid);const last=ms.length?ms[ms.length-1].ts:0;st.reads[cid]=st.reads[cid]||{};
-    if((st.reads[cid][me.email]||0)<last){st.reads[cid][me.email]=now;ch=true;}}
-  if(ch)save();}
-
+  if(latest>me.lastActive){const t=ISO(Math.max(Date.now(),latest+1));const p=R.profiles.find(x=>x.id===me.id);if(p)p.last_seen=t;me.lastActive=T(t);
+    await sb.from('profiles').update({last_seen:t}).eq('id',me.id);}
+  const cid=openChat();if(!cid)return;const ms=chatMsgs(cid);const last=ms.length?ms[ms.length-1].ts:0;const rd=(st.reads[cid]||{})[me.email]||0;
+  if(rd<last){const t=ISO(Math.max(Date.now(),last+1)),key=cid==='common'?'bigbang':cid;
+    const r=R.reads.find(x=>x.user_id===me.id&&x.chat_key===key);if(r)r.last_read_at=t;else R.reads.push({user_id:me.id,chat_key:key,last_read_at:t});
+    (st.reads[cid]=st.reads[cid]||{})[me.email]=T(t);
+    const {error}=await sb.from('chat_reads').upsert({user_id:me.id,chat_key:key,last_read_at:t});if(!error)renderMain();}
+}
 const avPicker=sel=>`<div class="avgrid">${AVATARS.map(a=>`<button type="button" class="avopt ${a[0]===sel?'sel':''}" data-act="pickav" data-k="${a[0]}" aria-label="${esc(a[1])}">${av(a[0],44)}</button>`).join('')}</div><div class="avlabel" id="avlabel">${esc(AV[sel][1])}</div>`;
 
 /* ---------- auth ---------- */
@@ -327,26 +379,28 @@ function orbitHero(){
 }
 function renderAuth(){
   const a=$('app');let body='';
-  if(auth.step==='email') body=`${orbitHero()}<h2>Your campus, past and present</h2><p class="lede">Students and alumni, verified by official college email.</p>
-    <label for="em">College email</label><input id="em" type="email" autocomplete="email" placeholder="you@${DOMAINS[0]}" value="${esc(auth.email)}">
+  if(auth.step==='config') body=`${orbitHero()}<h2>Almost there</h2><p class="lede">Orbit isn't connected to its database yet.</p>
+    <div class="notice">Open index.html and paste your Supabase Project URL and publishable key into SUPABASE_URL and SUPABASE_KEY near the top of the script.</div>`;
+  else if(auth.step==='loading') body=`${orbitHero()}<p class="lede">Loading Orbit…</p>`;
+  else if(auth.step==='email') body=`${orbitHero()}<h2>Your campus, past and present</h2><p class="lede">Students and alumni, verified by official college email.</p>
+    <label for="em">SSB email</label><input id="em" type="email" autocomplete="email" placeholder="you@${DOMAINS[0]}" value="${esc(auth.email)}">
     <div class="err" id="err"></div><button class="btn wide" data-act="sendotp">Send verification code</button>
-    <p class="hint">Only @${DOMAINS[0]} addresses can join. To test ticks in this demo, sign up two accounts and switch between them from your profile.</p>`;
-  else if(auth.step==='otp') body=`<h2>Check your college inbox</h2><p class="lede">We sent a 6-digit code to ${esc(auth.email)}</p>
-    <div class="inbox">Demo inbox, since no real email is sent: <b>${auth.otp}</b></div>
-    <label for="otp">Verification code</label><input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 digits">
+    <p class="hint">Only @${DOMAINS[0]} addresses can join.</p>`;
+  else if(auth.step==='otp') body=`<h2>Check your SSB inbox</h2><p class="lede">We sent a code to ${esc(auth.email)}. It can take a minute, so check spam too.</p>
+    <label for="otp">Verification code</label><input id="otp" inputmode="numeric" maxlength="10" autocomplete="one-time-code" placeholder="Code from the email">
     <div class="err" id="err"></div><button class="btn wide" data-act="verify">Verify email</button>
-    <p class="hint"><button class="link" data-act="authback">Use a different email</button></p>`;
+    <p class="hint"><button class="link" data-act="resend">Send a new code</button> or <button class="link" data-act="authback">use a different email</button></p>`;
   else body=`<h2>Set up your profile</h2><p class="lede">Call yourself anything. Your email stays as your verified identity.</p>
     <label for="nm">Display name</label><input id="nm" maxlength="40" placeholder="Anything you like">
     <div class="row2"><div><label for="role">I am</label><select id="role"><option>Student</option><option>Alumni</option></select></div>
     <div><label for="batch">Batch year</label><input id="batch" inputmode="numeric" maxlength="4" placeholder="e.g. ${MAXB-2}" required aria-describedby="bhint"><div class="field-hint" id="bhint">2020 to ${MAXB}</div></div></div>
     <label>Pick your celestial avatar</label>${avPicker(auth.avatar)}
     <div class="notice">${esc(auth.email)} will be visible to every member of the network.</div>
-    <div class="err" id="err"></div><button class="btn wide" data-act="finish">Join Orbit</button>`;
+    <div class="err" id="err"></div><button class="btn wide" data-act="finish">Join Orbit</button>
+    <p class="hint"><button class="link" data-act="logout">Log out</button></p>`;
   a.innerHTML=`<div class="authwrap"><div class="authcard">${body}</div></div>`;
   const f=$('em')||$('otp')||$('nm');if(f)f.focus();
 }
-
 /* ---------- app ---------- */
 function rail(me){
   const ic=(t,emo,label,badge)=>`<button class="rbtn ${ui.tab===t?'on':''}" data-act="tab" data-t="${t}" aria-label="${label}" title="${label}"><span aria-hidden="true">${emo}</span><small>${label}</small>${badge?`<span class="rb">${badge}</span>`:''}</button>`;
@@ -440,9 +494,7 @@ function modalHTML(me){
     <label for="pname">Display name</label><input id="pname" maxlength="40" value="${esc(me.name)}">
     <label>Celestial avatar</label>${avPicker(k)}
     <div class="err" id="perr"></div><div class="actions"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveprofile">Save profile</button></div>
-    <hr class="divider"><label for="switch">Demo: switch account</label>
-    <select id="switch">${Object.values(st.users).map(u=>`<option value="${esc(u.email)}" ${u.email===me.email?'selected':''}>${esc(u.name)} (${esc(u.email)})</option>`).join('')}</select>
-    <div class="actions" style="justify-content:flex-start"><button class="btn danger sm" data-act="logout">Log out</button></div></div></div>`;}
+    <hr class="divider"><div class="actions" style="justify-content:flex-start"><button class="btn danger sm" data-act="logout">Log out</button></div></div></div>`;}
   if(ui.modal==='menu'){const {cid,id}=ui.menu;const m=chatMsgs(cid).find(x=>x.id===id);if(!m){ui.modal=null;return '';}
     const own=m.from===me.email,pinned=isPinned(cid,id);
     return `<div class="modal sheetwrap" data-act="closebg"><div class="box sheet" role="dialog" aria-label="Message options">
@@ -461,110 +513,148 @@ function modalHTML(me){
       <div class="actions"><button class="btn" data-act="closemodal">Done</button></div></div></div>`;}
   return '';
 }
+// re-renders without disturbing whatever field you're typing in (keeps the phone keyboard open)
+function syncAttrs(o,n,isInput){[...o.attributes].forEach(at=>{if(!n.hasAttribute(at.name))o.removeAttribute(at.name);});[...n.attributes].forEach(at=>{if(isInput&&at.name==='value')return;if(o.getAttribute(at.name)!==at.value)o.setAttribute(at.name,at.value);});}
+function morph(html){
+  const app=$('app'),a=document.activeElement;
+  const full=()=>{app.innerHTML=html;};
+  if(!a||!a.id||!app.contains(a)||!a.matches('input,textarea'))return full();
+  const tpl=document.createElement('div');tpl.innerHTML=html;
+  const twin=tpl.querySelector('#'+CSS.escape(a.id));if(!twin||twin.tagName!==a.tagName)return full();
+  const oc=[],nc=[];for(let n=a;n&&n!==app;n=n.parentNode)oc.unshift(n);for(let n=twin;n&&n!==tpl;n=n.parentNode)nc.unshift(n);
+  if(oc.length!==nc.length)return full();
+  let op=app,np=tpl;
+  for(let i=0;i<oc.length;i++){const keep=oc[i],nw=nc[i];
+    [...op.childNodes].forEach(c=>{if(c!==keep)op.removeChild(c);});
+    const kids=[...np.childNodes],idx=kids.indexOf(nw);
+    kids.slice(0,idx).forEach(c=>op.insertBefore(c,keep));kids.slice(idx+1).forEach(c=>op.appendChild(c));
+    syncAttrs(keep,nw,i===oc.length-1);op=keep;np=nw;}
+}
 function renderMain(){
-  const me=meU();
+  const me=meU();if(!me)return;
   const old=$('msgs'),oldCid=ui._renderedCid;let keep=null;
   if(old&&!ui.forceBottom&&oldCid===ui.cid&&old.scrollHeight-old.scrollTop-old.clientHeight>40)keep=old.scrollTop;
+  const vals={};document.querySelectorAll('#app input[id],#app textarea[id],#app select[id]').forEach(el=>{vals[el.id]=el.value;});
   const chatMode=ui.tab==='chats';
   const showM=chatMode&&ui.showMembers&&ui.cid!=='common'&&st.groups[ui.cid]?.members.includes(me.email);
   let inner=rail(me);
   if(chatMode)inner+=chatList(me)+`<main class="conv">${conv(me)}</main>`+(showM?membersPanel(me):'');
   else inner+=`<main class="pagewrap">${ui.tab==='invites'?invitesView(me):ui.tab==='directory'?directoryView(me):discoverView(me)}</main>`;
-  $('app').innerHTML=`<div class="shell ${chatMode?'chat-mode':'page-mode'} ${ui.mobileMain?'m-main':''} ${showM?'with-members':''}">${inner}</div>${modalHTML(me)}`;
+  morph(`<div class="shell ${chatMode?'chat-mode':'page-mode'} ${ui.mobileMain?'m-main':''} ${showM?'with-members':''}">${inner}</div>${modalHTML(me)}`);
+  Object.entries(vals).forEach(([id,v])=>{const el=$(id);if(!el||el===document.activeElement)return;if(id==='msg'&&oldCid!==ui.cid)return;if(el.value!==v)el.value=v;});
+  if($('cq'))filterChats();if($('dirq'))filterDir();
   const box=$('msgs');if(box)box.scrollTop=keep!==null?keep:box.scrollHeight;
   ui._renderedCid=ui.cid;ui.forceBottom=false;
 }
-function render(){ if(!st.session||!st.users[st.session]) return renderAuth(); touch(); renderMain(); }
+function render(){ if(!AUTH||!booted||!meU()) return renderAuth(); scheduleTouch(); renderMain(); }
 
+/* ---------- sign-in lifecycle ---------- */
+async function boot(user){
+  AUTH={id:user.id,email:(user.email||'').toLowerCase()};booted=false;auth.step='loading';renderAuth();
+  try{await fetchKeys(ALL);}catch(e){auth.step='email';renderAuth();return err('err',errText(e));}
+  build();
+  if(!R.profiles.some(p=>p.id===AUTH.id)){auth.step='profile';auth.email=AUTH.email;renderAuth();return;}
+  booted=true;subscribe();openConv('common');render();
+}
+function signedOut(){AUTH=null;booted=false;if(channel){sb.removeChannel(channel);channel=null;}R=EMPTY();build();auth={step:'email',email:'',avatar:'moon'};ui.modal=null;renderAuth();}
 /* ---------- navigation ---------- */
 function openConv(cid){ui.tab='chats';ui.cid=cid;ui.mobileMain=true;ui.showMembers=false;ui.confirmDel=null;ui.pinIdx=0;ui.forceBottom=true;}
 function setTab(t){ui.tab=t;ui.mobileMain=false;ui.showMembers=false;ui.confirmDel=null;}
 
 /* ---------- actions ---------- */
-function act(a,d){
-  const me=st.session,g=d.g?st.groups[d.g]:st.groups[ui.cid];
+async function sendCode(email,el){if(el)el.disabled=true;const {error}=await sb.auth.signInWithOtp({email,options:{shouldCreateUser:true}});if(el)el.disabled=false;
+  if(error){const m=error.message||'';return /rate|seconds|security purposes/i.test(m)?'Too many requests. Wait a minute, then try again.':/not authorized/i.test(m)?'Email sending isn\'t set up yet (custom SMTP is needed).':/database error/i.test(m)?`Only @${DOMAINS[0]} emails can join.`:m;}return null;}
+async function act(a,d,el){
+  const meE=st.session,me=meU(),g=d.g?st.groups[d.g]:st.groups[ui.cid];
+  const run=async(fn,keys)=>{if(el)el.disabled=true;try{const r=await fn();if(r&&r.error)throw r.error;if(keys)await refresh(keys);return true;}catch(e){toast(errText(e));return false;}finally{if(el&&el.isConnected)el.disabled=false;}};
   switch(a){
-    case 'sendotp':{const e=val('em').toLowerCase();if(!domainOk(e))return err('err',`Use your official SSB email ending in @${DOMAINS.join(' or @')}.`);auth.email=e;auth.otp=String(Math.floor(100000+Math.random()*900000));auth.step='otp';return render();}
-    case 'verify':{if(val('otp')!==auth.otp)return err('err','That code doesn\'t match. Use the code shown in the demo inbox.');
-      if(st.users[auth.email]){st.session=auth.email;auth={step:'email',email:'',otp:'',avatar:'moon'};openConv('common');save();return render();}
-      auth.step='profile';return render();}
-    case 'authback':auth.step='email';return render();
-    case 'pickav':{if(st.session&&ui.modal==='profile')ui.tmpAv=d.k;else auth.avatar=d.k;
+    case 'sendotp':{const e=val('em').toLowerCase();if(!domainOk(e))return err('err',`Use your official SSB email ending in @${DOMAINS[0]}.`);
+      const m=await sendCode(e,el);if(m)return err('err',m);auth.email=e;auth.step='otp';return renderAuth();}
+    case 'resend':{const m=await sendCode(auth.email,el);if(m)return err('err',m);return toast('New code sent. Use the latest one.');}
+    case 'verify':{const c=val('otp').replace(/\D/g,'');if(c.length<6)return err('err','Enter the code from your email.');
+      if(el)el.disabled=true;const {error}=await sb.auth.verifyOtp({email:auth.email,token:c,type:'email'});if(el&&el.isConnected)el.disabled=false;
+      if(error)return err('err','That code is wrong or has expired. Send a new code and use the latest one.');return;}
+    case 'authback':auth.step='email';return renderAuth();
+    case 'pickav':{if(booted&&ui.modal==='profile')ui.tmpAv=d.k;else auth.avatar=d.k;
       document.querySelectorAll('.avopt').forEach(x=>x.classList.toggle('sel',x.dataset.k===d.k));const l=$('avlabel');if(l)l.textContent=AV[d.k][1];return;}
     case 'finish':{const name=val('nm');if(!name)return err('err','Add a display name. It can be anything you like.');
-      const batch=val('batch');if(!batch)return err('err','Batch year is required.');
-      if(!batchOk(batch))return err('err',`Batch year must be between 2020 and ${MAXB}.`);
-      st.users[auth.email]={email:auth.email,name,avatar:auth.avatar,role:val('role'),batch,since:Date.now()};
-      sysMsg('common',`${name} joined Orbit`);
-      st.session=auth.email;auth={step:'email',email:'',otp:'',avatar:'moon'};openConv('common');save();return render();}
+      const batch=val('batch');if(!batch)return err('err','Batch year is required.');if(!batchOk(batch))return err('err',`Batch year must be between 2020 and ${MAXB}.`);
+      if(el)el.disabled=true;const {error}=await sb.from('profiles').insert({id:AUTH.id,email:AUTH.email,name,avatar:auth.avatar,role:val('role'),batch:+batch});if(el&&el.isConnected)el.disabled=false;
+      if(error)return err('err',errText(error));return boot({id:AUTH.id,email:AUTH.email});}
+    case 'logout':ui.modal=null;await sb.auth.signOut();return signedOut();
     case 'tab':setTab(d.t);ui.modal=null;return render();
     case 'openchat':openConv(d.c);return render();
     case 'back':ui.mobileMain=false;ui.showMembers=false;return render();
     case 'members':ui.showMembers=!ui.showMembers;ui.confirmDel=null;return render();
-    case 'send':{const tx=val('msg');if(!tx)return;const cid=ui.cid,now=Date.now();let rcpt;
-      if(cid==='common')rcpt=Object.keys(st.users).filter(e=>e!==me);
-      else{if(!g||!g.members.includes(me))return;rcpt=g.members.filter(e=>e!==me);}
-      chatMsgs(cid).push({id:rid(),from:me,text:tx,ts:now,rcpt});st.reads[cid]=st.reads[cid]||{};st.reads[cid][me]=now;ui.forceBottom=true;save();render();$('msg')?.focus();return;}
+    case 'send':{const tx=val('msg');if(!tx)return;const cid=ui.cid;if(cid!=='common'&&!(g&&g.members.includes(meE)))return;$('msg').value='';
+      const {data,error}=await sb.from('messages').insert({group_id:cid==='common'?null:cid,sender_id:me.id,body:tx}).select().single();
+      if(error){if($('msg')&&!$('msg').value)$('msg').value=tx;return toast(errText(error));}
+      if(!R.messages.some(m=>m.id===data.id))R.messages.push(data);ui.forceBottom=true;build();render();return;}
     case 'msgmenu':ui.modal='menu';ui.menu={cid:ui.cid,id:d.id};return render();
-    case 'pin':{const {cid,id}=ui.menu,o=chatObj(cid);o.pins=o.pins||[];
-      if(isPinned(cid,id))o.pins=o.pins.filter(p=>p.id!==id);
-      else{o.pins.push({id,by:me,ts:Date.now()});o.pins.sort((x,y)=>x.ts-y.ts);while(o.pins.length>MAX_PINS)o.pins.shift();sysMsg(cid,`${uname(me)} pinned a message`);}
-      ui.pinIdx=0;ui.modal=null;save();return render();}
-    case 'copy':{const m=chatMsgs(ui.menu.cid).find(x=>x.id===ui.menu.id);try{navigator.clipboard?.writeText(m.text).catch(()=>{});}catch(e){}ui.modal=null;return render();}
+    case 'pin':{const {cid,id}=ui.menu,pinned=isPinned(cid,id);ui.modal=null;ui.pinIdx=0;render();
+      return run(()=>pinned?sb.from('pins').delete().eq('message_id',id):sb.from('pins').insert({message_id:id}),['pins','messages']);}
+    case 'copy':{const m=chatMsgs(ui.menu.cid).find(x=>x.id===ui.menu.id);try{navigator.clipboard?.writeText(m.text).catch(()=>{});}catch(e){}ui.modal=null;toast('Copied');return render();}
+    case 'info':ui.modal='info';ui.info={cid:d.c,id:d.id};return render();
     case 'pinjump':{const pins=pinsOf(ui.cid);if(!pins.length)return;const i=ui.pinIdx%pins.length,target=pins[i].id;ui.pinIdx=(i+1)%pins.length;render();
-      const el=document.querySelector(`[data-mid="${target}"]`);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1500);}return;}
+      const el2=document.querySelector(`[data-mid="${target}"]`);if(el2){el2.scrollIntoView({block:'center',behavior:'smooth'});el2.classList.add('flash');setTimeout(()=>el2.classList.remove('flash'),1500);}return;}
     case 'newgroup':ui.modal='create';ui.tmpEmo='🏏';render();$('gname')?.focus();return;
     case 'pickemo':ui.tmpEmo=d.e;document.querySelectorAll('.emo-opt').forEach(x=>x.classList.toggle('sel',x.dataset.e===d.e));return;
     case 'create':{const name=val('gname');if(!name)return err('gerr','Give the group a name.');
       if(name.toLowerCase()===MAIN_CHAT.toLowerCase()||Object.values(st.groups).some(x=>x.name.toLowerCase()===name.toLowerCase()))return err('gerr','That name is taken. Request an invite to the existing group or pick another name.');
-      const id='g'+Date.now().toString(36);st.groups[id]={id,name,emoji:ui.tmpEmo,cat:val('gcat'),desc:val('gdesc'),admin:me,members:[me],invites:[],requests:[],pins:[],created:Date.now(),
-        messages:[{id:rid(),sys:true,text:`${uname(me)} created the group`,ts:Date.now()}]};
-      ui.modal=null;openConv(id);ui.showMembers=true;save();return render();}
+      if(el)el.disabled=true;const {data,error}=await sb.from('groups').insert({name,emoji:ui.tmpEmo,category:val('gcat'),description:val('gdesc'),admin_id:me.id}).select().single();if(el&&el.isConnected)el.disabled=false;
+      if(error)return err('gerr',error.code==='23505'?'That name is taken. Pick another name.':errText(error));
+      ui.modal=null;await refresh(['groups','members','messages']);openConv(data.id);ui.showMembers=true;return render();}
     case 'editprofile':ui.modal='profile';ui.tmpAv=null;return render();
-    case 'saveprofile':{const n=val('pname');if(!n)return err('perr','Display name can\'t be empty.');const u=meU();u.name=n;if(ui.tmpAv)u.avatar=ui.tmpAv;ui.modal=null;save();return render();}
+    case 'saveprofile':{const n=val('pname');if(!n)return err('perr','Display name can\'t be empty.');const patch={name:n};if(ui.tmpAv)patch.avatar=ui.tmpAv;
+      const ok=await run(()=>sb.from('profiles').update(patch).eq('id',me.id),['profiles']);if(ok){ui.modal=null;render();}return;}
     case 'closemodal':ui.modal=null;return render();
-    case 'invite':{if(!g||g.admin!==me)return;const e=val('invEm').toLowerCase();
+    case 'invite':{if(!g||g.admin!==meE)return;const e=val('invEm').toLowerCase();
       if(!domainOk(e))return err('invErr',`Only @${DOMAINS[0]} emails can be invited.`);
       if(g.members.includes(e))return err('invErr','Already a member.');
-      if(g.requests.includes(e)){addMember(g,e);save();return render();}
       if(g.invites.some(i=>i.email===e))return err('invErr','An invite is already pending for this email.');
-      g.invites.push({email:e,by:me,ts:Date.now()});save();return render();}
-    case 'uninvite':g.invites=g.invites.filter(i=>i.email!==d.e);save();return render();
-    case 'approve':addMember(g,d.e);save();return render();
-    case 'rejectreq':g.requests=g.requests.filter(r=>r!==d.e);save();return render();
-    case 'kick':if(g.admin!==me||d.e===g.admin)return;g.members=g.members.filter(x=>x!==d.e);sysMsg(g.id,`${uname(d.e)} was removed by the admin`);save();return render();
-    case 'leave':g.members=g.members.filter(x=>x!==me);sysMsg(g.id,`${uname(me)} left the group`);openConv('common');save();return render();
-    case 'delgroup':if(g.admin!==me)return;if(ui.confirmDel!==g.id){ui.confirmDel=g.id;return render();}delete st.groups[g.id];openConv('common');save();return render();
-    case 'accept':addMember(g,me);openConv(g.id);save();return render();
-    case 'declineinv':g.invites=g.invites.filter(i=>i.email!==me);save();return render();
-    case 'request':if(!g.requests.includes(me))g.requests.push(me);save();return render();
-    case 'logout':st.session=null;ui.modal=null;openConv('common');save();return render();
+      if(g.requests.includes(e)&&st.users[e])return run(()=>sb.rpc('approve_request',{g:g.id,u:st.users[e].id}),['members','requests','invites','messages']);
+      return run(()=>sb.from('group_invites').insert({group_id:g.id,email:e,invited_by:me.id}),['invites']);}
+    case 'uninvite':return run(()=>sb.from('group_invites').delete().eq('group_id',g.id).eq('email',d.e),['invites']);
+    case 'approve':return run(()=>sb.rpc('approve_request',{g:g.id,u:st.users[d.e].id}),['members','requests','invites','messages']);
+    case 'rejectreq':return run(()=>sb.from('join_requests').delete().eq('group_id',g.id).eq('user_id',st.users[d.e].id),['requests']);
+    case 'kick':if(g.admin!==meE||d.e===g.admin)return;return run(()=>sb.from('group_members').delete().eq('group_id',g.id).eq('user_id',st.users[d.e].id),['members','messages']);
+    case 'leave':{const ok=await run(()=>sb.from('group_members').delete().eq('group_id',g.id).eq('user_id',me.id),['members','messages']);if(ok){openConv('common');render();}return;}
+    case 'delgroup':{if(g.admin!==meE)return;if(ui.confirmDel!==g.id){ui.confirmDel=g.id;return render();}
+      const ok=await run(()=>sb.from('groups').delete().eq('id',g.id),['groups','members','invites','requests','messages','pins']);if(ok){openConv('common');render();}return;}
+    case 'accept':{const ok=await run(()=>sb.rpc('accept_invite',{g:g.id}),['members','invites','requests','messages','pins','reads']);if(ok){openConv(g.id);render();}return;}
+    case 'declineinv':return run(()=>sb.from('group_invites').delete().eq('group_id',g.id).eq('email',meE),['invites']);
+    case 'request':return run(()=>sb.from('join_requests').insert({group_id:g.id,user_id:me.id}),['requests']);
   }
 }
 document.addEventListener('click',e=>{
   const t=e.target.closest('[data-act]');if(!t)return;
   if(t.dataset.act==='closebg'){if(e.target===t){ui.modal=null;render();}return;}
-  e.preventDefault();act(t.dataset.act,t.dataset);
+  e.preventDefault();act(t.dataset.act,t.dataset,t);
 });
 document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&ui.modal){ui.modal=null;return render();}
-  if(e.key!=='Enter'||e.shiftKey)return;
+  if(e.key!=='Enter'||e.shiftKey||e.isComposing)return;
   if(e.target.classList?.contains('bub')){e.preventDefault();return act('msgmenu',e.target.dataset);}
   const map={msg:'send',em:'sendotp',otp:'verify',invEm:'invite',gname:'create',nm:'finish',pname:'saveprofile'};
-  const a=map[e.target.id];if(a){e.preventDefault();act(a,{});}
+  const a=map[e.target.id];if(a){e.preventDefault();const btn=document.querySelector(`[data-act="${a}"]`);act(a,{},btn);}
 });
-document.addEventListener('change',e=>{
-  if(e.target.id==='switch'){st.session=e.target.value;ui.modal=null;openConv('common');save();render();}
-  if(e.target.id==='dirrole')filterDir();
-});
+document.addEventListener('change',e=>{if(e.target.id==='dirrole')filterDir();});
 document.addEventListener('input',e=>{
   if(e.target.id==='batch'){const c=cleanBatch(e.target.value);if(c!==e.target.value)e.target.value=c;}
   if(e.target.id==='dirq')filterDir();
-  if(e.target.id==='cq'){const q=e.target.value.trim().toLowerCase();document.querySelectorAll('.citem').forEach(c=>{c.style.display=!q||c.dataset.n.includes(q)?'':'none';});}
+  if(e.target.id==='cq')filterChats();
 });
+function filterChats(){const q=val('cq').toLowerCase();document.querySelectorAll('.citem').forEach(c=>{c.style.display=!q||c.dataset.n.includes(q)?'':'none';});}
 function filterDir(){const q=val('dirq').toLowerCase(),r=$('dirrole')?.value||'';document.querySelectorAll('.person').forEach(p=>{p.style.display=(!q||p.dataset.s.includes(q))&&(!r||p.dataset.r===r)?'':'none';});}
-window.addEventListener('storage',ev=>{if(ev.key===KEY){load();render();}});
-render();
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&booted)refresh(ALL);});
+if(!sb){renderAuth();}
+else{
+  sb.auth.onAuthStateChange((ev,session)=>{setTimeout(()=>{
+    if((ev==='INITIAL_SESSION'||ev==='SIGNED_IN')&&session&&(!AUTH||AUTH.id!==session.user.id))boot(session.user);
+    else if(ev==='INITIAL_SESSION'&&!session){auth.step='email';renderAuth();}
+    else if(ev==='SIGNED_OUT'&&AUTH)signedOut();
+  },0);});
+}
 </script>
 </body>
 </html>
