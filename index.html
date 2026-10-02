@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Orbit — campus and alumni network</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eceef7;--panel:#ffffff;--panel2:#e3e5f2;--text:#1a1840;--muted:#5f5d80;--line:#d3d5e6;
+  --accent:#5440dc;--accent-ink:#ffffff;--accent-soft:#e4e0ff;--gold:#c98a12;--danger:#c0392b;--ok:#1f7a52;
+  --night:#17153a;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#12112b;--panel:#181737;--panel2:#1f1d45;--text:#e9e8fb;--muted:#a3a1c7;--line:#2e2c5c;
+  --accent:#a99bff;--accent-ink:#14123a;--accent-soft:#2b2763;--gold:#f2b33d;--danger:#ff8a7a;--ok:#62d6a1;--night:#0d0c24;}}
+:root[data-theme="dark"]{
+  --bg:#12112b;--panel:#181737;--panel2:#1f1d45;--text:#e9e8fb;--muted:#a3a1c7;--line:#2e2c5c;
+  --accent:#a99bff;--accent-ink:#14123a;--accent-soft:#2b2763;--gold:#f2b33d;--danger:#ff8a7a;--ok:#62d6a1;--night:#0d0c24;}
+*,*::before,*::after{box-sizing:inherit}
+html{height:100%;scroll-padding-top:env(safe-area-inset-top,0px)}
+body{height:100%;margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+h1,h2,h3,.brand{font-family:"Bricolage Grotesque",Inter,system-ui,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{height:100%}
+.muted{color:var(--muted)}
+.err{color:var(--danger);font-size:13px;min-height:18px;margin:6px 0}
+.av{border-radius:50%;overflow:hidden;flex:none;display:inline-block;vertical-align:middle}
+.av svg{display:block;width:100%;height:100%}
+
+/* buttons & inputs */
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:10px 16px;font-weight:600}
+.btn:hover{filter:brightness(1.07)}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn.sm{padding:6px 12px;font-size:13px;border-radius:8px}
+.btn.wide{width:100%}
+.btn.danger{background:transparent;color:var(--danger);border:1px solid var(--danger)}
+.btn.ok{background:var(--ok);color:#fff}
+.btn[disabled]{opacity:.55;cursor:default;filter:none}
+.link{background:none;border:0;color:var(--accent);padding:0;font-weight:500}
+.iconb{background:transparent;border:1px solid var(--line);border-radius:8px;width:32px;height:32px;display:inline-grid;place-items:center;flex:none}
+input,select,textarea{width:100%;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;outline:none}
+input:focus,select:focus,textarea:focus{border-color:var(--accent)}
+label{display:block;font-size:13px;font-weight:600;margin:14px 0 6px}
+.badge{background:var(--gold);color:#1a1300;border-radius:999px;font-size:11px;font-weight:700;padding:1px 7px;margin-left:auto}
+.pill{font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;background:var(--accent-soft);color:var(--accent);flex:none}
+
+/* auth */
+.authwrap{min-height:100%;display:grid;place-items:center;padding:24px 16px;
+  background:radial-gradient(1px 1px at 20% 30%,#fff8 50%,transparent 51%),radial-gradient(1px 1px at 70% 20%,#fff6 50%,transparent 51%),radial-gradient(1.5px 1.5px at 85% 70%,#fff7 50%,transparent 51%),radial-gradient(1px 1px at 35% 80%,#fff5 50%,transparent 51%),var(--night)}
+.authcard{width:100%;max-width:440px;background:var(--panel);border-radius:20px;padding:28px;box-shadow:0 30px 80px -30px #000a}
+.orbit{position:relative;width:200px;height:200px;margin:0 auto 8px}
+.orbit .ring{position:absolute;inset:0;animation:spin 80s linear infinite}
+.orbit .ring .av{position:absolute;left:50%;top:50%;margin:-17px}
+.orbit .core{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+.orbit .core b{font:700 30px/1 "Bricolage Grotesque",sans-serif;letter-spacing:-.5px}
+.orbit::before{content:"";position:absolute;inset:17px;border:1px dashed var(--line);border-radius:50%}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.orbit .ring{animation:none}}
+.authcard h2{margin:6px 0 4px;font-size:22px;text-align:center}
+.authcard .lede{text-align:center;color:var(--muted);margin:0 0 8px}
+.hint{font-size:13px;color:var(--muted);margin-top:14px}
+.inbox{background:var(--accent-soft);border-radius:12px;padding:12px 14px;margin-top:12px;font-size:14px}
+.inbox b{font-size:20px;letter-spacing:4px;color:var(--accent)}
+.avgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:8px}
+.avopt{background:none;border:2px solid transparent;border-radius:50%;padding:2px;display:grid;place-items:center;aspect-ratio:1}
+.avopt.sel{border-color:var(--accent)}
+.avlabel{font-size:13px;color:var(--muted);margin-top:6px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.notice{font-size:13px;background:var(--panel2);border-radius:10px;padding:10px 12px;margin-top:14px}
+
+/* shell: rail | chat list | conversation */
+:root{--wall:#e6e3f3;--wall-dot:#5440dc22;--bub-in:#ffffff;--bub-out:#ddd8ff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--wall:#0f0e26;--wall-dot:#ffffff14;--bub-in:#1f1d45;--bub-out:#3a3380}}
+:root[data-theme="dark"]{--wall:#0f0e26;--wall-dot:#ffffff14;--bub-in:#1f1d45;--bub-out:#3a3380}
+.shell{display:grid;height:100%;grid-template-columns:68px 340px minmax(0,1fr)}
+.shell.page-mode{grid-template-columns:68px minmax(0,1fr)}
+.shell.chat-mode.with-members{grid-template-columns:68px 340px minmax(0,1fr) 300px}
+.rail{background:var(--panel2);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px;padding:14px 0}
+.rbtn{width:48px;height:48px;border-radius:14px;border:0;background:none;display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;font-size:21px;gap:2px}
+.rbtn:hover{background:var(--panel)}
+.rbtn.on{background:var(--accent-soft)}
+.rbtn small{display:none;font-size:11px;font-weight:600}
+.rbtn .rb{position:absolute;top:3px;right:2px;background:var(--gold);color:#1a1300;font-size:10px;font-weight:700;border-radius:999px;padding:0 5px;min-width:16px;line-height:16px}
+.rail .spacer{flex:1}
+.list{display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--panel);min-height:0;min-width:0}
+.lh{display:flex;align-items:center;gap:8px;padding:16px 16px 10px}
+.lh h1{font-size:24px;margin:0;flex:1;letter-spacing:-.3px}
+.mob-me{display:none;background:none;border:0;padding:0}
+.search{padding:0 12px 10px}
+.search input{border-radius:999px;background:var(--panel2);border-color:transparent;padding:8px 14px}
+.chats{overflow:auto;flex:1}
+.citem{display:flex;gap:12px;align-items:center;padding:10px 14px;width:100%;background:none;border:0;text-align:left}
+.citem:hover{background:var(--panel2)}
+.citem.on{background:var(--accent-soft)}
+.ci-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;border-bottom:1px solid var(--line);padding-bottom:10px}
+.ci-r{display:flex;align-items:center;gap:8px;min-width:0}
+.ci-r b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ci-r time{font-size:12px;color:var(--muted);flex:none}
+.prev{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;color:var(--muted);display:flex;align-items:center;gap:3px}
+.prev span.txt{overflow:hidden;text-overflow:ellipsis}
+.ub{background:var(--gold);color:#1a1300;border-radius:999px;font-size:11px;font-weight:700;padding:1px 7px;flex:none}
+.pinic{font-size:12px;flex:none;opacity:.7}
+.gav{border-radius:50%;background:var(--panel2);display:inline-grid;place-items:center;flex:none;border:1px solid var(--line)}
+.list-empty{padding:18px 16px;font-size:14px;color:var(--muted)}
+
+.conv{display:flex;flex-direction:column;min-width:0;min-height:0;background-color:var(--wall);
+  background-image:radial-gradient(var(--wall-dot) 1px,transparent 1.5px),radial-gradient(var(--wall-dot) 1px,transparent 1.5px);
+  background-size:38px 38px,38px 38px;background-position:0 0,19px 19px}
+.mh{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+.mh-t{flex:1;min-width:0;display:flex;flex-direction:column}
+.mh-t b{font:700 17px "Bricolage Grotesque",sans-serif}
+.mh-t small{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.back{display:none}
+.pinbar{display:flex;gap:10px;align-items:center;width:100%;text-align:left;background:var(--panel);border:0;border-bottom:1px solid var(--line);padding:8px 16px}
+.pinbar .pt{flex:1;min-width:0;display:flex;flex-direction:column;border-left:3px solid var(--accent);padding-left:10px}
+.pinbar b{font-size:12px;color:var(--accent)}
+.pinbar small{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.msgs{flex:1;overflow:auto;padding:14px 6%;display:flex;flex-direction:column;gap:6px}
+.msg{display:flex;gap:8px;align-items:flex-end;max-width:min(78%,560px)}
+.msg.mine{align-self:flex-end;flex-direction:row-reverse}
+.bub{background:var(--bub-in);border-radius:12px 12px 12px 3px;padding:6px 10px 4px;min-width:0;border:0;text-align:left;cursor:pointer;box-shadow:0 1px 1px #0000001a;display:block;width:auto}
+.msg.mine .bub{background:var(--bub-out);border-radius:12px 12px 3px 12px}
+.msg.flash .bub{animation:flash 1.4s ease}
+@keyframes flash{0%,40%{box-shadow:0 0 0 3px var(--gold)}100%{box-shadow:0 1px 1px #0000001a}}
+.mm{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;font-size:13px}
+.mm b{color:var(--accent)}
+.mm .em{font-size:11px;color:var(--muted)}
+.mt{white-space:pre-wrap;overflow-wrap:anywhere}
+.mf{display:flex;justify-content:flex-end;align-items:center;gap:3px;font-size:11px;color:var(--muted);margin-top:1px}
+.tick{background:none;border:0;padding:0 1px;color:var(--muted);display:inline-flex;line-height:0;flex:none}
+.tick.read{color:#2fa8e8}
+.sys{align-self:center;text-align:center;font-size:12px;color:var(--muted);background:var(--panel);border-radius:8px;padding:3px 10px;margin:4px 0}
+.composer{display:flex;gap:8px;align-items:center;padding:10px 16px 12px;background:var(--panel2)}
+.composer input{border-radius:999px;padding:11px 16px}
+.sendb{width:44px;height:44px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;flex:none}
+.locked{flex:1;display:grid;place-items:center;text-align:center;padding:30px}
+.locked>div{background:var(--panel);border-radius:16px;padding:24px;max-width:380px}
+.locked p{color:var(--muted)}
+
+.pagewrap{min-width:0;min-height:0;overflow:auto;background:var(--panel)}
+.page{padding:20px 24px;max-width:1100px}
+.ph2{display:flex;align-items:center;gap:10px;margin-bottom:4px}
+.ph2 h1{margin:0;font-size:24px;flex:1}
+.page .sub{color:var(--muted);margin:0 0 16px}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{border:1px solid var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px;background:var(--panel)}
+.card .top{display:flex;gap:10px;align-items:center}
+.card h3{margin:0;font-size:17px}
+.card p{margin:0;font-size:14px;color:var(--muted);flex:1}
+.card .meta{font-size:12px;color:var(--muted)}
+.people{display:flex;flex-direction:column}
+.person{display:flex;gap:12px;align-items:center;padding:10px 4px;border-bottom:1px solid var(--line)}
+.person .pt{flex:1;min-width:0;display:flex;flex-direction:column}
+.person .pt small{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.person a{color:var(--accent);text-decoration:none}
+.toolbar{display:flex;gap:10px;margin-bottom:12px}
+.toolbar select{width:auto}
+
+.members{border-left:1px solid var(--line);background:var(--panel);overflow:auto;padding:16px;display:flex;flex-direction:column;min-height:0}
+.ph{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.members h4{margin:18px 0 8px;font-size:13px;color:var(--muted)}
+.mrow{display:flex;gap:10px;align-items:center;padding:7px 0}
+.mrow .pt{flex:1;min-width:0;display:flex;flex-direction:column}
+.mrow .pt b{font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mrow .pt small{font-size:12px;color:var(--muted);overflow-wrap:anywhere}
+.inl{display:flex;gap:6px}
+.inl input{padding:7px 10px}
+.foot{margin-top:auto;padding-top:20px}
+
+.modal{position:fixed;inset:0;background:#0009;display:grid;place-items:center;z-index:50;padding:16px}
+.modal .box{background:var(--panel);border-radius:18px;padding:22px;width:100%;max-width:480px;max-height:90vh;overflow:auto}
+.modal h3{margin:0 0 4px;font-size:20px}
+.modal.sheetwrap{place-items:end center}
+.sheet{padding:10px !important;max-width:420px !important}
+.sheet-prev{background:var(--panel2);border-radius:10px;padding:10px 12px;margin-bottom:6px;font-size:14px;max-height:120px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere}
+.srow{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;padding:13px 12px;border-radius:10px;text-align:left;font-weight:500}
+.srow:hover{background:var(--panel2)}
+.srow.muted{color:var(--muted);justify-content:center}
+.emogrid{display:flex;flex-wrap:wrap;gap:6px}
+.emo-opt{width:40px;height:40px;border-radius:10px;border:2px solid var(--line);background:var(--panel);font-size:20px}
+.emo-opt.sel{border-color:var(--accent);background:var(--accent-soft)}
+.actions{display:flex;gap:8px;justify-content:flex-end;margin-top:18px}
+.info-sec{margin-top:14px}
+.info-sec h4{display:flex;align-items:center;gap:6px;margin:0 0 6px;font-size:14px}
+.field-hint{font-size:12px;color:var(--muted);margin-top:4px}
+.divider{border:0;border-top:1px solid var(--line);margin:18px 0 4px}
+
+@media (max-width:1100px){
+  .shell.chat-mode.with-members{grid-template-columns:68px 320px minmax(0,1fr)}
+  .members{position:fixed;top:0;right:0;bottom:0;width:min(340px,100%);z-index:30;box-shadow:-20px 0 50px -20px #0007;padding-top:calc(16px + env(safe-area-inset-top,0px))}
+}
+@media (max-width:860px){
+  .shell,.shell.page-mode,.shell.chat-mode.with-members{grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto}
+  .rail{order:2;flex-direction:row;justify-content:space-around;border-right:0;border-top:1px solid var(--line);padding:4px 0;gap:0}
+  .rbtn{width:auto;min-width:64px;height:54px;font-size:19px}
+  .rbtn small{display:block}
+  .rail .spacer,.rail .rme{display:none}
+  .shell.chat-mode .conv{display:none}
+  .shell.chat-mode.m-main .list,.shell.chat-mode.m-main .rail{display:none}
+  .shell.chat-mode.m-main .conv{display:flex}
+  .mob-me{display:inline-flex}
+  .back{display:inline-grid}
+  .msgs{padding:12px 10px}
+  .msg{max-width:88%}
+  .composer{padding:8px 10px 10px}
+  .page{padding:16px}
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+/* ---------- config ---------- */
+const DOMAINS=['ssb.scaler.com'];
+const KEY='orbit-ssb-v3';
+const MAIN_CHAT='Big Bang';
+const MAXB=new Date().getFullYear()+2;   // batch years allowed: 2020 to current year + 2
+const MAX_PINS=3;
+const CATS=['Sports','Riding','Fitness','Careers','Arts','Social','Other'];
+const EMOJIS=['🏏','⚽','🏍️','🚴','🏀','🏸','🎾','🏃','🧗','🎸','📸','🎮','♟️','🎓','💼','🍳','✈️','🔭'];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const rid=()=>Math.random().toString(36).slice(2,10);
+
+/* ---------- cosmic avatars ---------- */
+const S=(bg,inner)=>`<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect width="64" height="64" fill="${bg}"/>${inner}</svg>`;
+const dots=(c,pts)=>pts.map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}" fill="${c}"/>`).join('');
+const ST=dots('#ffffff',[[10,14,.8],[52,10,1],[56,44,.7],[8,48,.9],[46,56,.6],[20,6,.6]]);
+function burst(cx,cy,n,r1,r2){const p=[];for(let i=0;i<n*2;i++){const r=i%2?r2:r1,a=Math.PI*i/n-Math.PI/2;p.push((cx+r*Math.cos(a)).toFixed(1)+','+(cy+r*Math.sin(a)).toFixed(1));}return p.join(' ');}
+function rays(cx,cy,n,r1,r2,c,w){let s='';for(let i=0;i<n;i++){const a=2*Math.PI*i/n;s+=`<line x1="${(cx+r1*Math.cos(a)).toFixed(1)}" y1="${(cy+r1*Math.sin(a)).toFixed(1)}" x2="${(cx+r2*Math.cos(a)).toFixed(1)}" y2="${(cy+r2*Math.sin(a)).toFixed(1)}" stroke="${c}" stroke-width="${w}" stroke-linecap="round"/>`;}return s;}
+let WH='';['#5b4bff','#7a5cff','#9b6dff','#c07dff','#e28cff','#ffffff'].forEach((c,i)=>{WH+=`<ellipse cx="32" cy="${32+i*1.6}" rx="${27-i*4.2}" ry="${13-i*2}" fill="none" stroke="${c}" stroke-width="2"/>`});
+const CP=[[12,42],[22,26],[35,30],[47,16],[52,40],[36,48]];
+const AVATARS=[
+ ['sun','Sun',S('#2b1650',rays(32,32,12,17,26,'#ffb703',3)+'<circle cx="32" cy="32" r="13" fill="#ffc93c"/>')],
+ ['moon','Crescent moon',S('#0e1b3d',ST+'<circle cx="32" cy="32" r="16" fill="#f3efd9"/><circle cx="39" cy="27" r="14" fill="#0e1b3d"/>')],
+ ['fullmoon','Full moon',S('#101828',ST+'<circle cx="32" cy="32" r="18" fill="#dcd8cc"/><circle cx="26" cy="26" r="4" fill="#bdb8aa"/><circle cx="39" cy="36" r="5" fill="#bdb8aa"/><circle cx="29" cy="41" r="2.5" fill="#bdb8aa"/>')],
+ ['earth','Earth',S('#06122b',ST+'<circle cx="32" cy="32" r="18" fill="#2f6fd6"/><path d="M21 25c4-5 11-4 12 0s-4 6-2 9-5 6-8 2-6-7-2-11z" fill="#43b36b"/><path d="M38 38c3-2 8-1 8 3s-5 6-8 4-3-5 0-7z" fill="#43b36b"/>')],
+ ['ringed','Ringed giant',S('#1a1033',ST+'<circle cx="32" cy="32" r="13" fill="#e39b5a"/><path d="M20 30h24" stroke="#c97c3f" stroke-width="2"/><ellipse cx="32" cy="32" rx="27" ry="7" fill="none" stroke="#f6d39b" stroke-width="3" transform="rotate(-18 32 32)"/>')],
+ ['comet','Comet',S('#061a2e',ST+'<path d="M44 18 L8 44 L18 54 Z" fill="#7cc7ff" opacity=".35"/><path d="M44 18 L14 42 L22 50 Z" fill="#bde0fe" opacity=".6"/><circle cx="44" cy="19" r="7" fill="#eef7ff"/>')],
+ ['blackhole','Black hole',S('#05030c','<ellipse cx="32" cy="32" rx="27" ry="9" fill="none" stroke="#ff8a3d" stroke-width="4" transform="rotate(-15 32 32)"/><circle cx="32" cy="32" r="13" fill="#000" stroke="#ffc07a" stroke-width="2"/>')],
+ ['galaxy','Spiral galaxy',S('#120b2e',ST+'<path d="M32 32 C40 24,50 32,44 42 C38 52,18 48,16 36" fill="none" stroke="#c8b6ff" stroke-width="3" stroke-linecap="round"/><path d="M32 32 C24 40,14 32,20 22 C26 12,46 16,48 28" fill="none" stroke="#8fd3ff" stroke-width="3" stroke-linecap="round"/><circle cx="32" cy="32" r="5" fill="#fff4c2"/>')],
+ ['nebula','Nebula',S('#1b0b2e','<circle cx="24" cy="28" r="17" fill="#ff5fa2" opacity=".5"/><circle cx="41" cy="35" r="17" fill="#6a5cff" opacity=".55"/><circle cx="33" cy="20" r="11" fill="#38d9c6" opacity=".45"/>'+ST)],
+ ['supernova','Supernova',S('#1a0f2b',`<polygon points="${burst(32,32,12,27,10)}" fill="#ff7b54"/><polygon points="${burst(32,32,8,16,7)}" fill="#ffd56b"/><circle cx="32" cy="32" r="5" fill="#fff"/>`)],
+ ['pulsar','Pulsar',S('#07121f',ST+'<g transform="rotate(25 32 32)"><polygon points="32,32 21,0 43,0" fill="#7df9ff" opacity=".55"/><polygon points="32,32 21,64 43,64" fill="#7df9ff" opacity=".55"/></g><circle cx="32" cy="32" r="7" fill="#e6fdff"/>')],
+ ['asteroid','Asteroid',S('#141420',ST+'<path d="M17 31 L24 17 L39 15 L49 26 L46 41 L34 49 L21 44 Z" fill="#8a7f72"/><circle cx="30" cy="28" r="4" fill="#6e655a"/><circle cx="40" cy="37" r="3" fill="#6e655a"/><circle cx="27" cy="40" r="2" fill="#6e655a"/>')],
+ ['eclipse','Solar eclipse',S('#05050a','<circle cx="32" cy="32" r="21" fill="#ffd27a" opacity=".3"/><circle cx="32" cy="32" r="17" fill="#ffe7a8"/><circle cx="33" cy="31" r="16" fill="#05050a"/>')],
+ ['binary','Binary stars',S('#0d1030',ST+'<ellipse cx="32" cy="32" rx="23" ry="10" fill="none" stroke="#5a5f9e" stroke-width="1.5"/><circle cx="16" cy="30" r="8" fill="#ffb347"/><circle cx="47" cy="34" r="6" fill="#8ec5ff"/>')],
+ ['constellation','Constellation',S('#0a1430',`<polyline points="${CP.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#9fb4ff" stroke-width="1.5"/>`+dots('#ffffff',CP.map(p=>[p[0],p[1],2.6])))],
+ ['aurora','Aurora',S('#06142a',ST+'<path d="M0 30 Q16 14 32 28 T64 24 L64 40 Q48 30 32 42 T0 38Z" fill="#3ef0a1" opacity=".6"/><path d="M0 38 Q20 26 36 38 T64 34 L64 44 Q44 40 30 48 T0 46Z" fill="#b16cff" opacity=".5"/><path d="M0 52 L14 44 L26 51 L40 42 L54 50 L64 46 L64 64 L0 64Z" fill="#0b1f1a"/>')],
+ ['quasar','Quasar',S('#0b0716',ST+'<g transform="rotate(30 32 32)"><rect x="30.5" y="0" width="3" height="64" fill="#9be7ff" opacity=".75"/><ellipse cx="32" cy="32" rx="17" ry="5" fill="#ff9f43" opacity=".85"/></g><circle cx="32" cy="32" r="5" fill="#fff"/>')],
+ ['wormhole','Wormhole',S('#0a0a18',WH)],
+];
+const AV=Object.fromEntries(AVATARS.map(a=>[a[0],a]));
+const av=(k,size=36)=>{const a=AV[k]||AVATARS[0];return `<span class="av" style="width:${size}px;height:${size}px" title="${esc(a[1])}">${a[2]}</span>`};
+
+const BB_SVG=S('#1a0f2b',`<polygon points="${burst(32,32,14,30,12)}" fill="#ff6fb5"/><polygon points="${burst(32,32,10,21,9)}" fill="#ffb347"/><polygon points="${burst(32,32,7,13,6)}" fill="#fff3a8"/><circle cx="32" cy="32" r="4" fill="#fff"/>`);
+
+/* ---------- state ---------- */
+let st;
+function seed(){return {session:null,users:{},groups:{},common:{messages:[],pins:[]},reads:{}};}
+function load(){let x=null;try{const r=localStorage.getItem(KEY);if(r)x=JSON.parse(r);}catch(e){}
+  st=Object.assign(seed(),x||{});st.common.pins=st.common.pins||[];Object.values(st.groups).forEach(g=>{g.pins=g.pins||[];});}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(st));}catch(e){}}
+load();
+let auth={step:'email',email:'',otp:'',avatar:'moon'};
+let ui={tab:'chats',cid:'common',mobileMain:true,showMembers:false,modal:null,tmpAv:null,tmpEmo:'🏏',confirmDel:null,pinIdx:0,menu:null,info:null,forceBottom:true};
+
+/* ---------- helpers ---------- */
+const $=id=>document.getElementById(id);
+const val=id=>($(id)?.value||'').trim();
+const err=(id,msg)=>{const e=$(id);if(e)e.textContent=msg;};
+const isMobile=()=>!!(window.matchMedia&&window.matchMedia('(max-width:860px)').matches);
+function domainOk(e){const m=String(e).toLowerCase().match(/^[^\s@]+@([^\s@]+)$/);return !!m&&DOMAINS.includes(m[1]);}
+const meU=()=>st.users[st.session];
+const mine=()=>Object.values(st.groups).filter(g=>g.members.includes(st.session));
+const myInvites=()=>Object.values(st.groups).filter(g=>g.invites.some(i=>i.email===st.session));
+const uname=e=>st.users[e]?.name||e;
+const chatObj=cid=>cid==='common'?st.common:st.groups[cid];
+const chatMsgs=cid=>chatObj(cid)?.messages||[];
+const chatName=cid=>cid==='common'?MAIN_CHAT:(st.groups[cid]?.name||'');
+const chatAv=(cid,size)=>cid==='common'?`<span class="av" style="width:${size}px;height:${size}px">${BB_SVG}</span>`:`<span class="gav" style="width:${size}px;height:${size}px;font-size:${Math.round(size*.5)}px">${st.groups[cid]?.emoji||'✨'}</span>`;
+function fmt(ts){const d=new Date(ts),t=d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});return d.toDateString()===new Date().toDateString()?t:`${d.toLocaleDateString([], {day:'numeric',month:'short'})}, ${t}`;}
+function fmtShort(ts){const d=new Date(ts);return d.toDateString()===new Date().toDateString()?d.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):d.toLocaleDateString([], {day:'numeric',month:'short'});}
+function cleanBatch(v){v=String(v).replace(/\D/g,'').slice(0,4);const rule=[/2/,/0/,/[23]/];let out='';for(let i=0;i<v.length;i++){if(i<3&&!rule[i].test(v[i]))break;out+=v[i];}return out;}
+const batchOk=v=>/^20[23]\d$/.test(v)&&+v>=2020&&+v<=MAXB;
+function sysMsg(cid,text){chatMsgs(cid).push({id:rid(),sys:true,text,ts:Date.now()});}
+function addMember(g,email){
+  if(!g.members.includes(email))g.members.push(email);
+  g.invites=g.invites.filter(i=>i.email!==email);g.requests=g.requests.filter(r=>r!==email);
+  sysMsg(g.id,`${uname(email)} joined the group`);
+}
+function pinsOf(cid){const o=chatObj(cid);if(!o)return[];const ids=new Set(chatMsgs(cid).map(m=>m.id));return (o.pins||[]).filter(p=>ids.has(p.id)).sort((a,b)=>b.ts-a.ts);}
+const isPinned=(cid,id)=>(chatObj(cid)?.pins||[]).some(p=>p.id===id);
+
+/* ---------- ticks ---------- */
+function tickState(m,cid){const r=m.rcpt||[];if(!r.length)return 1;const rd=st.reads[cid]||{};
+  if(r.every(e=>(rd[e]||0)>=m.ts))return 3;if(r.every(e=>(rd[e]||0)>=m.ts||(st.users[e]?.lastActive||0)>=m.ts))return 2;return 1;}
+const TICK1='<svg viewBox="0 0 16 11" width="16" height="11" aria-hidden="true"><path d="M1.5 6l3 3L11 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const TICK2='<svg viewBox="0 0 18 11" width="18" height="11" aria-hidden="true"><path d="M1 6l3 3L10.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.5 8.5l.5.5L14.5 2.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const tickIcon=(m,cid)=>{const t=tickState(m,cid);return `<span class="tick ${t===3?'read':''}">${t===1?TICK1:TICK2}</span>`;};
+function tickBtn(m,cid){const t=tickState(m,cid);const lbl=['','Sent','Delivered','Read'][t];
+  return `<button class="tick ${t===3?'read':''}" data-act="info" data-c="${cid}" data-id="${m.id}" aria-label="${lbl}, tap for details" title="${lbl}">${t===1?TICK1:TICK2}</button>`;}
+function unread(cid){const me=st.session,rd=(st.reads[cid]||{})[me]||0;return chatMsgs(cid).filter(m=>!m.sys&&m.from!==me&&m.ts>rd&&(m.rcpt||[]).includes(me)).length;}
+const totalUnread=()=>unread('common')+mine().reduce((s,g)=>s+unread(g.id),0);
+function openChat(){if(ui.tab!=='chats')return null;if(isMobile()&&!ui.mobileMain)return null;
+  if(ui.cid==='common')return 'common';return st.groups[ui.cid]?.members.includes(st.session)?ui.cid:null;}
+// marks this user online (delivered) and the open chat as read; saves only on real change so tabs don't ping-pong
+function touch(){const me=meU();if(!me)return;let ch=false;const now=Date.now();
+  const cids=['common',...mine().map(g=>g.id)];
+  const latest=Math.max(0,...cids.flatMap(c=>chatMsgs(c).filter(m=>(m.rcpt||[]).includes(me.email)).map(m=>m.ts)));
+  if(!me.lastActive||latest>me.lastActive){me.lastActive=now;ch=true;}
+  const cid=openChat();if(cid){const ms=chatMsgs(cid);const last=ms.length?ms[ms.length-1].ts:0;st.reads[cid]=st.reads[cid]||{};
+    if((st.reads[cid][me.email]||0)<last){st.reads[cid][me.email]=now;ch=true;}}
+  if(ch)save();}
+
+const avPicker=sel=>`<div class="avgrid">${AVATARS.map(a=>`<button type="button" class="avopt ${a[0]===sel?'sel':''}" data-act="pickav" data-k="${a[0]}" aria-label="${esc(a[1])}">${av(a[0],44)}</button>`).join('')}</div><div class="avlabel" id="avlabel">${esc(AV[sel][1])}</div>`;
+
+/* ---------- auth ---------- */
+function orbitHero(){
+  const picks=AVATARS.slice(0,12);
+  const ring=picks.map((a,i)=>{const ang=i/picks.length*2*Math.PI;return `<span style="position:absolute;left:${50+41.5*Math.cos(ang)}%;top:${50+41.5*Math.sin(ang)}%;transform:translate(-50%,-50%)">${av(a[0],34)}</span>`}).join('');
+  return `<div class="orbit"><div class="ring">${ring}</div><div class="core"><b>Orbit</b></div></div>`;
+}
+function renderAuth(){
+  const a=$('app');let body='';
+  if(auth.step==='email') body=`${orbitHero()}<h2>Your campus, past and present</h2><p class="lede">Students and alumni, verified by official college email.</p>
+    <label for="em">College email</label><input id="em" type="email" autocomplete="email" placeholder="you@${DOMAINS[0]}" value="${esc(auth.email)}">
+    <div class="err" id="err"></div><button class="btn wide" data-act="sendotp">Send verification code</button>
+    <p class="hint">Only @${DOMAINS[0]} addresses can join. To test ticks in this demo, sign up two accounts and switch between them from your profile.</p>`;
+  else if(auth.step==='otp') body=`<h2>Check your college inbox</h2><p class="lede">We sent a 6-digit code to ${esc(auth.email)}</p>
+    <div class="inbox">Demo inbox, since no real email is sent: <b>${auth.otp}</b></div>
+    <label for="otp">Verification code</label><input id="otp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 digits">
+    <div class="err" id="err"></div><button class="btn wide" data-act="verify">Verify email</button>
+    <p class="hint"><button class="link" data-act="authback">Use a different email</button></p>`;
+  else body=`<h2>Set up your profile</h2><p class="lede">Call yourself anything. Your email stays as your verified identity.</p>
+    <label for="nm">Display name</label><input id="nm" maxlength="40" placeholder="Anything you like">
+    <div class="row2"><div><label for="role">I am</label><select id="role"><option>Student</option><option>Alumni</option></select></div>
+    <div><label for="batch">Batch year</label><input id="batch" inputmode="numeric" maxlength="4" placeholder="e.g. ${MAXB-2}" required aria-describedby="bhint"><div class="field-hint" id="bhint">2020 to ${MAXB}</div></div></div>
+    <label>Pick your celestial avatar</label>${avPicker(auth.avatar)}
+    <div class="notice">${esc(auth.email)} will be visible to every member of the network.</div>
+    <div class="err" id="err"></div><button class="btn wide" data-act="finish">Join Orbit</button>`;
+  a.innerHTML=`<div class="authwrap"><div class="authcard">${body}</div></div>`;
+  const f=$('em')||$('otp')||$('nm');if(f)f.focus();
+}
+
+/* ---------- app ---------- */
+function rail(me){
+  const ic=(t,emo,label,badge)=>`<button class="rbtn ${ui.tab===t?'on':''}" data-act="tab" data-t="${t}" aria-label="${label}" title="${label}"><span aria-hidden="true">${emo}</span><small>${label}</small>${badge?`<span class="rb">${badge}</span>`:''}</button>`;
+  return `<nav class="rail">${ic('chats','💬','Chats',totalUnread())}${ic('discover','🔭','Discover')}${ic('invites','✉️','Invites',myInvites().length)}${ic('directory','👥','People')}
+    <div class="spacer"></div><button class="rbtn rme" data-act="editprofile" title="Your profile" aria-label="Your profile">${av(me.avatar,36)}</button></nav>`;
+}
+const meBtn=me=>`<button class="mob-me" data-act="editprofile" aria-label="Your profile">${av(me.avatar,32)}</button>`;
+function chatList(me){
+  const items=[{cid:'common'},...mine().map(g=>({cid:g.id}))].map(x=>{const ms=chatMsgs(x.cid);const last=ms[ms.length-1];
+    return {...x,last,ts:last?last.ts:(st.groups[x.cid]?.created||0)}});
+  const big=items[0],rest=items.slice(1).sort((a,b)=>b.ts-a.ts);
+  const row=x=>{const l=x.last,u=unread(x.cid),own=l&&!l.sys&&l.from===me.email;
+    const prev=l?(l.sys?l.text:`${own?'You':uname(l.from)}: ${l.text}`):(x.cid==='common'?'Everyone at SSB is here. Say hi.':'No messages yet');
+    return `<button class="citem ${ui.cid===x.cid?'on':''}" data-act="openchat" data-c="${x.cid}" data-n="${esc(chatName(x.cid).toLowerCase())}">${chatAv(x.cid,48)}
+      <span class="ci-t"><span class="ci-r"><b>${esc(chatName(x.cid))}</b><time>${l?fmtShort(l.ts):''}</time></span>
+      <span class="ci-r"><span class="prev">${own?tickIcon(l,x.cid):''}<span class="txt">${esc(prev)}</span></span>${u?`<span class="ub">${u}</span>`:x.cid==='common'?'<span class="pinic" title="Always on top">📌</span>':''}</span></span></button>`};
+  return `<section class="list"><div class="lh"><h1>Chats</h1><button class="iconb" data-act="newgroup" title="Create group" aria-label="Create group">+</button>${meBtn(me)}</div>
+    <div class="search"><input id="cq" placeholder="Search chats" autocomplete="off"></div>
+    <div class="chats">${row(big)}${rest.map(row).join('')}${rest.length?'':`<div class="list-empty">Your groups show up here. <button class="link" data-act="tab" data-t="discover">Discover groups</button> or <button class="link" data-act="newgroup">create one</button>.</div>`}</div></section>`;
+}
+function msgHTML(x,cid){
+  if(x.sys)return `<div class="sys">${esc(x.text)}</div>`;
+  const own=x.from===st.session,u=st.users[x.from]||{name:x.from,avatar:'asteroid'},pin=isPinned(cid,x.id);
+  return `<div class="msg ${own?'mine':''}" data-mid="${x.id}">${own?'':av(u.avatar,30)}<div class="bub" role="button" tabindex="0" data-act="msgmenu" data-id="${x.id}" aria-label="Message options">
+    ${own?'':`<div class="mm"><b>${esc(u.name)}</b><span class="em">${esc(x.from)}</span></div>`}<div class="mt">${esc(x.text)}</div>
+    <div class="mf">${pin?'<span title="Pinned">📌</span>':''}<time>${fmt(x.ts)}</time>${own?tickBtn(x,cid):''}</div></div></div>`;
+}
+function conv(me){
+  if(ui.cid!=='common'&&!st.groups[ui.cid])ui.cid='common';
+  const cid=ui.cid,isG=cid!=='common',g=isG?st.groups[cid]:null,isM=!isG||g.members.includes(me.email),isA=isG&&g.admin===me.email;
+  const n=isG?g.members.length:Object.keys(st.users).length;
+  const sub=isG?`${n} member${n===1?'':'s'}, admin ${esc(uname(g.admin))}`:`Everyone at SSB, ${n} member${n===1?'':'s'}`;
+  const pins=isM?pinsOf(cid):[];let pinbar='';
+  if(pins.length){const i=ui.pinIdx%pins.length,pm=chatMsgs(cid).find(m=>m.id===pins[i].id);
+    pinbar=`<button class="pinbar" data-act="pinjump"><span aria-hidden="true">📌</span><span class="pt"><b>Pinned message${pins.length>1?` ${i+1} of ${pins.length}`:''}</b><small>${esc(uname(pm.from))}: ${esc(pm.text)}</small></span></button>`;}
+  let body;
+  if(isM) body=`<div class="msgs" id="msgs">${chatMsgs(cid).map(m=>msgHTML(m,cid)).join('')||`<div class="sys">${isG?'No messages yet. Say hi.':'Every verified member is in here. Start the conversation.'}</div>`}</div>
+    <div class="composer"><input id="msg" maxlength="2000" placeholder="Message" autocomplete="off" aria-label="Message ${esc(chatName(cid))}"><button class="sendb" data-act="send" aria-label="Send"><svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M3 20.5 21 12 3 3.5l.01 6.6L15 12 3.01 13.9z" fill="currentColor"/></svg></button></div>`;
+  else{const inv=g.invites.some(i=>i.email===me.email),req=g.requests.includes(me.email);
+    body=`<div class="locked"><div><div style="font-size:44px">${g.emoji}</div><h3>${esc(g.name)} is invite-only</h3><p>Members join when the admin, ${esc(uname(g.admin))}, invites them.</p>
+    ${inv?`<button class="btn ok" data-act="accept" data-g="${g.id}">Accept invite</button>`:req?'<button class="btn" disabled>Request sent</button>':`<button class="btn" data-act="request" data-g="${g.id}">Request an invite</button>`}</div></div>`;}
+  return `<div class="mh"><button class="iconb back" data-act="back" aria-label="Back to chats">‹</button>${chatAv(cid,40)}
+    <div class="mh-t"><b>${esc(chatName(cid))}</b><small>${sub}</small></div>
+    ${isG&&isM?`<button class="btn ghost sm" data-act="members">${ui.showMembers?'Hide':'Members'}${isA&&g.requests.length?` (${g.requests.length})`:''}</button>`:''}</div>${pinbar}${body}`;
+}
+function membersPanel(me){
+  const g=st.groups[ui.cid];const isA=g.admin===me.email;
+  const row=(e,right='')=>{const u=st.users[e];return `<div class="mrow">${av(u?.avatar||'asteroid',32)}<div class="pt"><b>${esc(u?.name||'Not joined yet')}</b><small>${esc(e)}</small></div>${right}</div>`};
+  let admin='';
+  if(isA){
+    admin=`<h4>Invite by college email</h4><div class="inl"><input id="invEm" type="email" placeholder="name@${DOMAINS[0]}"><button class="btn sm" data-act="invite">Invite</button></div><div class="err" id="invErr"></div>
+      ${g.requests.length?`<h4>Join requests</h4>${g.requests.map(e=>row(e,`<button class="btn ok sm" data-act="approve" data-e="${esc(e)}">Approve</button><button class="iconb" data-act="rejectreq" data-e="${esc(e)}" aria-label="Decline">✕</button>`)).join('')}`:''}
+      ${g.invites.length?`<h4>Pending invites</h4>${g.invites.map(i=>row(i.email,`<button class="link" data-act="uninvite" data-e="${esc(i.email)}">Cancel</button>`)).join('')}`:''}`;
+  }
+  const foot=isA?`<button class="btn danger wide" data-act="delgroup">${ui.confirmDel===g.id?'Tap again to delete for everyone':'Delete group'}</button>`:`<button class="btn ghost wide" data-act="leave">Leave group</button>`;
+  return `<aside class="members"><div class="ph"><b>Members (${g.members.length})</b><button class="iconb" data-act="members" aria-label="Close">✕</button></div>
+    ${g.members.map(e=>row(e,e===g.admin?'<span class="pill">admin</span>':isA?`<button class="link" data-act="kick" data-e="${esc(e)}">Remove</button>`:'')).join('')}
+    ${admin}<div class="foot">${foot}</div></aside>`;
+}
+function discoverView(me){
+  const gs=Object.values(st.groups).sort((a,b)=>b.members.length-a.members.length);
+  return `<div class="page"><div class="ph2"><h1>Discover groups</h1>${meBtn(me)}</div><p class="sub">Every group created at SSB, with its admin. Ask the admin for an invite, or start your own.</p>
+    <div style="margin-bottom:16px"><button class="btn" data-act="newgroup">Create a group</button></div>
+    <div class="cards">${gs.map(g=>{
+      const isM=g.members.includes(me.email),inv=g.invites.some(i=>i.email===me.email),req=g.requests.includes(me.email);
+      const b=isM?`<button class="btn ghost sm" data-act="openchat" data-c="${g.id}">Open chat</button>`:inv?`<button class="btn ok sm" data-act="accept" data-g="${g.id}">Accept invite</button>`:req?'<button class="btn sm" disabled>Request sent</button>':`<button class="btn sm" data-act="request" data-g="${g.id}">Request an invite</button>`;
+      return `<div class="card"><div class="top">${chatAv(g.id,44)}<div><h3>${esc(g.name)}</h3><div class="meta">${esc(g.cat)}, ${g.members.length} member${g.members.length===1?'':'s'}</div></div></div><p>${esc(g.desc||'')}</p><div class="meta">Admin: ${esc(uname(g.admin))}</div><div>${b}</div></div>`}).join('')||'<p class="muted">No groups yet. Create the first one and you become its admin.</p>'}</div></div>`;
+}
+function invitesView(me){
+  const inv=myInvites();
+  return `<div class="page"><div class="ph2"><h1>Invites</h1>${meBtn(me)}</div><p class="sub">Groups whose admins invited you.</p>
+    ${inv.length?`<div class="cards">${inv.map(g=>{const i=g.invites.find(x=>x.email===me.email);return `<div class="card"><div class="top">${chatAv(g.id,44)}<div><h3>${esc(g.name)}</h3><div class="meta">Invited by ${esc(uname(i.by))}</div></div></div><p>${esc(g.desc||'')}</p><div style="display:flex;gap:8px"><button class="btn ok sm" data-act="accept" data-g="${g.id}">Accept</button><button class="btn ghost sm" data-act="declineinv" data-g="${g.id}">Decline</button></div></div>`}).join('')}</div>`
+      :'<p class="muted">No pending invites. Browse Discover and request an invite to a group you like.</p>'}</div>`;
+}
+function directoryView(me){
+  const us=Object.values(st.users).sort((a,b)=>a.name.localeCompare(b.name));
+  return `<div class="page"><div class="ph2"><h1>People</h1>${meBtn(me)}</div><p class="sub">${us.length} verified member${us.length===1?'':'s'}.</p>
+    <div class="toolbar"><input id="dirq" placeholder="Search name, email or batch"><select id="dirrole"><option value="">Everyone</option><option>Student</option><option>Alumni</option></select></div>
+    <div class="people">${us.map(u=>`<div class="person" data-s="${esc((u.name+' '+u.email+' '+u.batch).toLowerCase())}" data-r="${esc(u.role)}">${av(u.avatar,40)}<div class="pt"><b>${esc(u.name)}</b><small><a href="mailto:${esc(u.email)}">${esc(u.email)}</a></small></div><span class="pill">${esc(u.role)} ${esc(u.batch||'')}</span></div>`).join('')}</div></div>`;
+}
+function modalHTML(me){
+  if(ui.modal==='create') return `<div class="modal" data-act="closebg"><div class="box" role="dialog" aria-label="Create a group">
+    <h3>Create a group</h3><p class="muted" style="margin:0">You become the admin and decide who gets in.</p>
+    <label for="gname">Group name</label><input id="gname" maxlength="40" placeholder="e.g. Thursday Badminton">
+    <label>Icon</label><div class="emogrid">${EMOJIS.map(e=>`<button type="button" class="emo-opt ${e===ui.tmpEmo?'sel':''}" data-act="pickemo" data-e="${e}">${e}</button>`).join('')}</div>
+    <label for="gcat">Category</label><select id="gcat">${CATS.map(c=>`<option>${c}</option>`).join('')}</select>
+    <label for="gdesc">What is it about?</label><textarea id="gdesc" rows="3" maxlength="200" placeholder="When you meet, who should join"></textarea>
+    <div class="err" id="gerr"></div><div class="actions"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="create">Create group</button></div></div></div>`;
+  if(ui.modal==='profile'){const k=ui.tmpAv||me.avatar;return `<div class="modal" data-act="closebg"><div class="box" role="dialog" aria-label="Your profile">
+    <h3>Your profile</h3><p class="muted" style="margin:0">${esc(me.email)}, ${esc(me.role)} ${esc(me.batch)}. Your email is your verified identity and can't be changed.</p>
+    <label for="pname">Display name</label><input id="pname" maxlength="40" value="${esc(me.name)}">
+    <label>Celestial avatar</label>${avPicker(k)}
+    <div class="err" id="perr"></div><div class="actions"><button class="btn ghost" data-act="closemodal">Cancel</button><button class="btn" data-act="saveprofile">Save profile</button></div>
+    <hr class="divider"><label for="switch">Demo: switch account</label>
+    <select id="switch">${Object.values(st.users).map(u=>`<option value="${esc(u.email)}" ${u.email===me.email?'selected':''}>${esc(u.name)} (${esc(u.email)})</option>`).join('')}</select>
+    <div class="actions" style="justify-content:flex-start"><button class="btn danger sm" data-act="logout">Log out</button></div></div></div>`;}
+  if(ui.modal==='menu'){const {cid,id}=ui.menu;const m=chatMsgs(cid).find(x=>x.id===id);if(!m){ui.modal=null;return '';}
+    const own=m.from===me.email,pinned=isPinned(cid,id);
+    return `<div class="modal sheetwrap" data-act="closebg"><div class="box sheet" role="dialog" aria-label="Message options">
+      <div class="sheet-prev">${esc(m.text)}</div>
+      <button class="srow" data-act="pin"><span aria-hidden="true">📌</span>${pinned?'Unpin message':'Pin message'}</button>
+      ${own?`<button class="srow" data-act="info" data-c="${cid}" data-id="${id}"><span aria-hidden="true">ℹ️</span>Message info</button>`:''}
+      <button class="srow" data-act="copy"><span aria-hidden="true">📋</span>Copy text</button>
+      <button class="srow muted" data-act="closemodal">Cancel</button></div></div>`;}
+  if(ui.modal==='info'){const m=chatMsgs(ui.info.cid).find(x=>x.id===ui.info.id);if(!m){ui.modal=null;return '';}
+    const rd=st.reads[ui.info.cid]||{};const R=[],D=[],W=[];
+    (m.rcpt||[]).forEach(e=>{if((rd[e]||0)>=m.ts)R.push([e,rd[e]]);else if((st.users[e]?.lastActive||0)>=m.ts)D.push([e,st.users[e].lastActive]);else W.push([e,0]);});
+    const sec=(title,icon,cls,list)=>list.length?`<div class="info-sec"><h4><span class="tick ${cls}">${icon}</span>${title} (${list.length})</h4>${list.map(([e,t])=>`<div class="mrow">${av(st.users[e]?.avatar,30)}<div class="pt"><b>${esc(uname(e))}</b><small>${esc(e)}</small></div>${t?`<small class="muted">${fmt(t)}</small>`:''}</div>`).join('')}</div>`:'';
+    return `<div class="modal" data-act="closebg"><div class="box" role="dialog" aria-label="Message info"><h3>Message info</h3>
+      <div class="bub" style="margin-top:10px;background:var(--bub-out);cursor:default"><div class="mt">${esc(m.text)}</div><div class="mf"><time>${fmt(m.ts)}</time></div></div>
+      ${(m.rcpt||[]).length?sec('Read by',TICK2,'read',R)+sec('Delivered to',TICK2,'',D)+sec('Sent, not delivered yet',TICK1,'',W):'<p class="muted">Nobody else was in this chat when you sent it.</p>'}
+      <div class="actions"><button class="btn" data-act="closemodal">Done</button></div></div></div>`;}
+  return '';
+}
+function renderMain(){
+  const me=meU();
+  const old=$('msgs'),oldCid=ui._renderedCid;let keep=null;
+  if(old&&!ui.forceBottom&&oldCid===ui.cid&&old.scrollHeight-old.scrollTop-old.clientHeight>40)keep=old.scrollTop;
+  const chatMode=ui.tab==='chats';
+  const showM=chatMode&&ui.showMembers&&ui.cid!=='common'&&st.groups[ui.cid]?.members.includes(me.email);
+  let inner=rail(me);
+  if(chatMode)inner+=chatList(me)+`<main class="conv">${conv(me)}</main>`+(showM?membersPanel(me):'');
+  else inner+=`<main class="pagewrap">${ui.tab==='invites'?invitesView(me):ui.tab==='directory'?directoryView(me):discoverView(me)}</main>`;
+  $('app').innerHTML=`<div class="shell ${chatMode?'chat-mode':'page-mode'} ${ui.mobileMain?'m-main':''} ${showM?'with-members':''}">${inner}</div>${modalHTML(me)}`;
+  const box=$('msgs');if(box)box.scrollTop=keep!==null?keep:box.scrollHeight;
+  ui._renderedCid=ui.cid;ui.forceBottom=false;
+}
+function render(){ if(!st.session||!st.users[st.session]) return renderAuth(); touch(); renderMain(); }
+
+/* ---------- navigation ---------- */
+function openConv(cid){ui.tab='chats';ui.cid=cid;ui.mobileMain=true;ui.showMembers=false;ui.confirmDel=null;ui.pinIdx=0;ui.forceBottom=true;}
+function setTab(t){ui.tab=t;ui.mobileMain=false;ui.showMembers=false;ui.confirmDel=null;}
+
+/* ---------- actions ---------- */
+function act(a,d){
+  const me=st.session,g=d.g?st.groups[d.g]:st.groups[ui.cid];
+  switch(a){
+    case 'sendotp':{const e=val('em').toLowerCase();if(!domainOk(e))return err('err',`Use your official SSB email ending in @${DOMAINS.join(' or @')}.`);auth.email=e;auth.otp=String(Math.floor(100000+Math.random()*900000));auth.step='otp';return render();}
+    case 'verify':{if(val('otp')!==auth.otp)return err('err','That code doesn\'t match. Use the code shown in the demo inbox.');
+      if(st.users[auth.email]){st.session=auth.email;auth={step:'email',email:'',otp:'',avatar:'moon'};openConv('common');save();return render();}
+      auth.step='profile';return render();}
+    case 'authback':auth.step='email';return render();
+    case 'pickav':{if(st.session&&ui.modal==='profile')ui.tmpAv=d.k;else auth.avatar=d.k;
+      document.querySelectorAll('.avopt').forEach(x=>x.classList.toggle('sel',x.dataset.k===d.k));const l=$('avlabel');if(l)l.textContent=AV[d.k][1];return;}
+    case 'finish':{const name=val('nm');if(!name)return err('err','Add a display name. It can be anything you like.');
+      const batch=val('batch');if(!batch)return err('err','Batch year is required.');
+      if(!batchOk(batch))return err('err',`Batch year must be between 2020 and ${MAXB}.`);
+      st.users[auth.email]={email:auth.email,name,avatar:auth.avatar,role:val('role'),batch,since:Date.now()};
+      sysMsg('common',`${name} joined Orbit`);
+      st.session=auth.email;auth={step:'email',email:'',otp:'',avatar:'moon'};openConv('common');save();return render();}
+    case 'tab':setTab(d.t);ui.modal=null;return render();
+    case 'openchat':openConv(d.c);return render();
+    case 'back':ui.mobileMain=false;ui.showMembers=false;return render();
+    case 'members':ui.showMembers=!ui.showMembers;ui.confirmDel=null;return render();
+    case 'send':{const tx=val('msg');if(!tx)return;const cid=ui.cid,now=Date.now();let rcpt;
+      if(cid==='common')rcpt=Object.keys(st.users).filter(e=>e!==me);
+      else{if(!g||!g.members.includes(me))return;rcpt=g.members.filter(e=>e!==me);}
+      chatMsgs(cid).push({id:rid(),from:me,text:tx,ts:now,rcpt});st.reads[cid]=st.reads[cid]||{};st.reads[cid][me]=now;ui.forceBottom=true;save();render();$('msg')?.focus();return;}
+    case 'msgmenu':ui.modal='menu';ui.menu={cid:ui.cid,id:d.id};return render();
+    case 'pin':{const {cid,id}=ui.menu,o=chatObj(cid);o.pins=o.pins||[];
+      if(isPinned(cid,id))o.pins=o.pins.filter(p=>p.id!==id);
+      else{o.pins.push({id,by:me,ts:Date.now()});o.pins.sort((x,y)=>x.ts-y.ts);while(o.pins.length>MAX_PINS)o.pins.shift();sysMsg(cid,`${uname(me)} pinned a message`);}
+      ui.pinIdx=0;ui.modal=null;save();return render();}
+    case 'copy':{const m=chatMsgs(ui.menu.cid).find(x=>x.id===ui.menu.id);try{navigator.clipboard?.writeText(m.text).catch(()=>{});}catch(e){}ui.modal=null;return render();}
+    case 'pinjump':{const pins=pinsOf(ui.cid);if(!pins.length)return;const i=ui.pinIdx%pins.length,target=pins[i].id;ui.pinIdx=(i+1)%pins.length;render();
+      const el=document.querySelector(`[data-mid="${target}"]`);if(el){el.scrollIntoView({block:'center',behavior:'smooth'});el.classList.add('flash');setTimeout(()=>el.classList.remove('flash'),1500);}return;}
+    case 'newgroup':ui.modal='create';ui.tmpEmo='🏏';render();$('gname')?.focus();return;
+    case 'pickemo':ui.tmpEmo=d.e;document.querySelectorAll('.emo-opt').forEach(x=>x.classList.toggle('sel',x.dataset.e===d.e));return;
+    case 'create':{const name=val('gname');if(!name)return err('gerr','Give the group a name.');
+      if(name.toLowerCase()===MAIN_CHAT.toLowerCase()||Object.values(st.groups).some(x=>x.name.toLowerCase()===name.toLowerCase()))return err('gerr','That name is taken. Request an invite to the existing group or pick another name.');
+      const id='g'+Date.now().toString(36);st.groups[id]={id,name,emoji:ui.tmpEmo,cat:val('gcat'),desc:val('gdesc'),admin:me,members:[me],invites:[],requests:[],pins:[],created:Date.now(),
+        messages:[{id:rid(),sys:true,text:`${uname(me)} created the group`,ts:Date.now()}]};
+      ui.modal=null;openConv(id);ui.showMembers=true;save();return render();}
+    case 'editprofile':ui.modal='profile';ui.tmpAv=null;return render();
+    case 'saveprofile':{const n=val('pname');if(!n)return err('perr','Display name can\'t be empty.');const u=meU();u.name=n;if(ui.tmpAv)u.avatar=ui.tmpAv;ui.modal=null;save();return render();}
+    case 'closemodal':ui.modal=null;return render();
+    case 'invite':{if(!g||g.admin!==me)return;const e=val('invEm').toLowerCase();
+      if(!domainOk(e))return err('invErr',`Only @${DOMAINS[0]} emails can be invited.`);
+      if(g.members.includes(e))return err('invErr','Already a member.');
+      if(g.requests.includes(e)){addMember(g,e);save();return render();}
+      if(g.invites.some(i=>i.email===e))return err('invErr','An invite is already pending for this email.');
+      g.invites.push({email:e,by:me,ts:Date.now()});save();return render();}
+    case 'uninvite':g.invites=g.invites.filter(i=>i.email!==d.e);save();return render();
+    case 'approve':addMember(g,d.e);save();return render();
+    case 'rejectreq':g.requests=g.requests.filter(r=>r!==d.e);save();return render();
+    case 'kick':if(g.admin!==me||d.e===g.admin)return;g.members=g.members.filter(x=>x!==d.e);sysMsg(g.id,`${uname(d.e)} was removed by the admin`);save();return render();
+    case 'leave':g.members=g.members.filter(x=>x!==me);sysMsg(g.id,`${uname(me)} left the group`);openConv('common');save();return render();
+    case 'delgroup':if(g.admin!==me)return;if(ui.confirmDel!==g.id){ui.confirmDel=g.id;return render();}delete st.groups[g.id];openConv('common');save();return render();
+    case 'accept':addMember(g,me);openConv(g.id);save();return render();
+    case 'declineinv':g.invites=g.invites.filter(i=>i.email!==me);save();return render();
+    case 'request':if(!g.requests.includes(me))g.requests.push(me);save();return render();
+    case 'logout':st.session=null;ui.modal=null;openConv('common');save();return render();
+  }
+}
+document.addEventListener('click',e=>{
+  const t=e.target.closest('[data-act]');if(!t)return;
+  if(t.dataset.act==='closebg'){if(e.target===t){ui.modal=null;render();}return;}
+  e.preventDefault();act(t.dataset.act,t.dataset);
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&ui.modal){ui.modal=null;return render();}
+  if(e.key!=='Enter'||e.shiftKey)return;
+  if(e.target.classList?.contains('bub')){e.preventDefault();return act('msgmenu',e.target.dataset);}
+  const map={msg:'send',em:'sendotp',otp:'verify',invEm:'invite',gname:'create',nm:'finish',pname:'saveprofile'};
+  const a=map[e.target.id];if(a){e.preventDefault();act(a,{});}
+});
+document.addEventListener('change',e=>{
+  if(e.target.id==='switch'){st.session=e.target.value;ui.modal=null;openConv('common');save();render();}
+  if(e.target.id==='dirrole')filterDir();
+});
+document.addEventListener('input',e=>{
+  if(e.target.id==='batch'){const c=cleanBatch(e.target.value);if(c!==e.target.value)e.target.value=c;}
+  if(e.target.id==='dirq')filterDir();
+  if(e.target.id==='cq'){const q=e.target.value.trim().toLowerCase();document.querySelectorAll('.citem').forEach(c=>{c.style.display=!q||c.dataset.n.includes(q)?'':'none';});}
+});
+function filterDir(){const q=val('dirq').toLowerCase(),r=$('dirrole')?.value||'';document.querySelectorAll('.person').forEach(p=>{p.style.display=(!q||p.dataset.s.includes(q))&&(!r||p.dataset.r===r)?'':'none';});}
+window.addEventListener('storage',ev=>{if(ev.key===KEY){load();render();}});
+render();
+</script>
+</body>
+</html>
