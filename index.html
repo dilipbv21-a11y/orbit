@@ -265,7 +265,7 @@ const BB_SVG=S('#1a0f2b',`<polygon points="${burst(32,32,14,30,12)}" fill="#ff6f
 
 /* ---------- backend (paste your two Supabase values here) ---------- */
 const SUPABASE_URL='https://oeocdhkoxavjsxypwcjr.supabase.co';
-const SUPABASE_KEY='sb_publishable_IxWmSzsSg6pqhZRzaD7ZCw_wXqNFROZ';
+const SUPABASE_KEY='PASTE_YOUR_PUBLISHABLE_KEY_HERE';
 const CONFIGURED=/^https:\/\//.test(SUPABASE_URL)&&!SUPABASE_KEY.startsWith('PASTE');
 const sb=CONFIGURED&&window.supabase?window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY):null;
 const T=s=>s?Date.parse(String(s).replace(/(\.\d{3})\d+/,'$1')):0;
@@ -280,12 +280,32 @@ const QUERIES={
   members:()=>sb.from('group_members').select('*'),
   invites:()=>sb.from('group_invites').select('*'),
   requests:()=>sb.from('join_requests').select('*'),
-  messages:()=>sb.from('messages').select('*').order('created_at',{ascending:false}).limit(1000),
+  messages:()=>sb.from('messages').select('*').order('created_at',{ascending:false}).limit(400),
   pins:()=>sb.from('pins').select('*'),
   reads:()=>sb.from('chat_reads').select('*'),
 };
 const TABLE_KEY={profiles:'profiles',groups:'groups',group_members:'members',group_invites:'invites',join_requests:'requests',messages:'messages',pins:'pins',chat_reads:'reads'};
 const ALL=Object.keys(QUERIES);
+// --- local cache: reopening the app downloads only what's new (keeps us inside the free plan) ---
+const CK=()=>AUTH?'orbit-cache-'+AUTH.id:null;let cacheT=null;
+function saveCache(){clearTimeout(cacheT);cacheT=setTimeout(()=>{try{const k=CK();if(!k||!booted)return;
+  const msgs=[...R.messages].sort((a,b)=>a.created_at<b.created_at?-1:1).slice(-600);localStorage.setItem(k,JSON.stringify({...R,messages:msgs}));}catch(e){}},2000);}
+function loadCache(){try{const k=CK();const raw=k&&localStorage.getItem(k);return raw?JSON.parse(raw):null;}catch(e){return null;}}
+async function syncFromCache(c){R={...EMPTY(),...c};
+  const oldest=R.messages.reduce((a,m)=>m.created_at<a?m.created_at:a,'9999');
+  const last=R.messages.reduce((a,m)=>m.created_at>a?m.created_at:a,'1970-01-01T00:00:00Z');
+  const [ids,fresh]=await Promise.all([sb.from('messages').select('id').gte('created_at',oldest).lte('created_at',last),
+    sb.from('messages').select('*').gt('created_at',last).order('created_at',{ascending:true}).limit(400),
+    fetchKeys(['profiles','groups','members','invites','requests','pins','reads'])]);
+  if(ids.error)throw ids.error;if(fresh.error)throw fresh.error;
+  const keep=new Set(ids.data.map(x=>x.id));R.messages=R.messages.filter(m=>keep.has(m.id));
+  (fresh.data||[]).forEach(m=>{if(!R.messages.some(x=>x.id===m.id))R.messages.push(m);});}
+const LIVE_TABLES=['messages','pins','groups','group_members','group_invites','join_requests'];
+// fetch only messages newer than what we have, instead of reloading everything
+async function refreshSince(){try{const last=R.messages.reduce((a,m)=>m.created_at>a?m.created_at:a,'1970-01-01T00:00:00Z');
+  const others=['groups','members','invites','requests','pins','reads','profiles'];
+  const [mr]=await Promise.all([sb.from('messages').select('*').gt('created_at',last).order('created_at',{ascending:true}).limit(400),fetchKeys(others)]);
+  if(mr.error)throw mr.error;(mr.data||[]).forEach(m=>{if(!R.messages.some(x=>x.id===m.id))R.messages.push(m);});build();render();}catch(e){toast(errText(e));}}
 async function fetchKeys(keys){const res=await Promise.all(keys.map(k=>QUERIES[k]()));res.forEach((r,i)=>{if(r.error)throw r.error;R[keys[i]]=r.data||[];});}
 async function refresh(keys){try{await fetchKeys(keys);build();render();}catch(e){toast(errText(e));}}
 // turns database rows into the shape the screens use
@@ -311,12 +331,13 @@ const pending=new Set();let pendT=null;
 function queueRefresh(k){pending.add(k);clearTimeout(pendT);pendT=setTimeout(()=>{const ks=[...pending];pending.clear();refresh(ks);},250);}
 function subscribe(){
   if(channel)sb.removeChannel(channel);channel=sb.channel('orbit-live');
-  Object.keys(TABLE_KEY).forEach(t=>channel.on('postgres_changes',{event:'*',schema:'public',table:t},p=>{
-    if(t==='messages'&&p.eventType==='INSERT'){if(!R.messages.some(m=>m.id===p.new.id))R.messages.push(p.new);build();render();return;}
+  LIVE_TABLES.forEach(t=>channel.on('postgres_changes',{event:'*',schema:'public',table:t},p=>{
+    if(t==='messages'&&p.eventType==='DELETE'){R.messages=R.messages.filter(m=>m.id!==p.old.id);build();render();return;}
+    if(t==='messages'&&p.eventType==='INSERT'){if(!R.messages.some(m=>m.id===p.new.id))R.messages.push(p.new);if(p.new.sender_id&&!R.profiles.some(x=>x.id===p.new.sender_id))queueRefresh('profiles');build();render();return;}
     if(t==='profiles'&&p.eventType==='UPDATE'){const i=R.profiles.findIndex(x=>x.id===p.new.id);if(i>=0){R.profiles[i]=p.new;build();render();return;}}
     if(t==='chat_reads'&&p.eventType!=='DELETE'){const i=R.reads.findIndex(x=>x.user_id===p.new.user_id&&x.chat_key===p.new.chat_key);if(i>=0)R.reads[i]=p.new;else R.reads.push(p.new);build();render();return;}
     queueRefresh(TABLE_KEY[t]);}));
-  channel.subscribe();
+  let wasDown=false;channel.subscribe(status=>{if(status==='SUBSCRIBED'){if(wasDown){wasDown=false;refreshSince();}}else if(status==='CHANNEL_ERROR'||status==='TIMED_OUT'||status==='CLOSED'){wasDown=true;}});
 }
 function toast(msg){let t=$('toast');if(!t){t=document.createElement('div');t.id='toast';t.setAttribute('role','status');document.body.appendChild(t);}t.textContent=msg;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),4000);}
 function errText(e){const m=(e&&(e.message||e.error_description))||String(e);if(e?.code==='23505'||/duplicate key/i.test(m))return 'That already exists.';return m;}
@@ -386,7 +407,7 @@ function renderAuth(){
     <label for="em">SSB email</label><input id="em" type="email" autocomplete="email" placeholder="you@${DOMAINS[0]}" value="${esc(auth.email)}">
     <div class="err" id="err"></div><button class="btn wide" data-act="sendotp">Send verification code</button>
     <p class="hint">Only @${DOMAINS[0]} addresses can join.</p>`;
-  else if(auth.step==='otp') body=`<h2>Check your SSB inbox</h2><p class="lede">We sent a code to ${esc(auth.email)}. It can take a minute, so check spam too.</p>
+  else if(auth.step==='otp') body=`<h2>Check your SSB inbox</h2><p class="lede">We sent an email to ${esc(auth.email)}. Enter the code from it, or just tap the link in the email. It can take a minute, so check spam too.</p>
     <label for="otp">Verification code</label><input id="otp" inputmode="numeric" maxlength="10" autocomplete="one-time-code" placeholder="Code from the email">
     <div class="err" id="err"></div><button class="btn wide" data-act="verify">Verify email</button>
     <p class="hint"><button class="link" data-act="resend">Send a new code</button> or <button class="link" data-act="authback">use a different email</button></p>`;
@@ -546,17 +567,17 @@ function renderMain(){
   const box=$('msgs');if(box)box.scrollTop=keep!==null?keep:box.scrollHeight;
   ui._renderedCid=ui.cid;ui.forceBottom=false;
 }
-function render(){ if(!AUTH||!booted||!meU()) return renderAuth(); scheduleTouch(); renderMain(); }
+function render(){ if(!AUTH||!booted||!meU()) return renderAuth(); scheduleTouch(); renderMain(); saveCache(); }
 
 /* ---------- sign-in lifecycle ---------- */
 async function boot(user){
   AUTH={id:user.id,email:(user.email||'').toLowerCase()};booted=false;auth.step='loading';renderAuth();
-  try{await fetchKeys(ALL);}catch(e){auth.step='email';renderAuth();return err('err',errText(e));}
+  try{const c=loadCache();if(c&&c.messages&&c.messages.length)await syncFromCache(c);else await fetchKeys(ALL);}catch(e){auth.step='email';renderAuth();return err('err',errText(e));}
   build();
   if(!R.profiles.some(p=>p.id===AUTH.id)){auth.step='profile';auth.email=AUTH.email;renderAuth();return;}
   booted=true;subscribe();openConv('common');render();
 }
-function signedOut(){AUTH=null;booted=false;if(channel){sb.removeChannel(channel);channel=null;}R=EMPTY();build();auth={step:'email',email:'',avatar:'moon'};ui.modal=null;renderAuth();}
+function signedOut(){try{const k=CK();if(k)localStorage.removeItem(k);}catch(e){}AUTH=null;booted=false;if(channel){sb.removeChannel(channel);channel=null;}R=EMPTY();build();auth={step:'email',email:'',avatar:'moon'};ui.modal=null;renderAuth();}
 /* ---------- navigation ---------- */
 function openConv(cid){ui.tab='chats';ui.cid=cid;ui.mobileMain=true;ui.showMembers=false;ui.confirmDel=null;ui.pinIdx=0;ui.forceBottom=true;}
 function setTab(t){ui.tab=t;ui.mobileMain=false;ui.showMembers=false;ui.confirmDel=null;}
@@ -646,7 +667,12 @@ document.addEventListener('input',e=>{
 });
 function filterChats(){const q=val('cq').toLowerCase();document.querySelectorAll('.citem').forEach(c=>{c.style.display=!q||c.dataset.n.includes(q)?'':'none';});}
 function filterDir(){const q=val('dirq').toLowerCase(),r=$('dirrole')?.value||'';document.querySelectorAll('.person').forEach(p=>{p.style.display=(!q||p.dataset.s.includes(q))&&(!r||p.dataset.r===r)?'':'none';});}
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&booted)refresh(ALL);});
+let hiddenAt=0;
+document.addEventListener('visibilitychange',()=>{if(document.hidden){hiddenAt=Date.now();return;}if(booted&&Date.now()-hiddenAt>30000)refreshSince();});
+// ticks: re-check who has received/read only while one of my recent messages in the open chat is still waiting
+setInterval(()=>{if(!booted||document.hidden)return;try{const cid=openChat();if(!cid)return;const me=st.session,now=Date.now();
+  const waiting=chatMsgs(cid).some(m=>!m.sys&&m.from===me&&now-m.ts<15*60000&&tickState(m,cid)<3);
+  if(waiting)refresh(['reads','profiles']);}catch(e){}},45000);
 if(!sb){renderAuth();}
 else{
   sb.auth.onAuthStateChange((ev,session)=>{setTimeout(()=>{
