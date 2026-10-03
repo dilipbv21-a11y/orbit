@@ -1,4 +1,4 @@
-// Orbit service worker: shows notifications for new messages and opens the right chat when tapped.
+// Orbit service worker v2: shows notifications for new messages and opens the right chat when tapped.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
 
@@ -9,8 +9,8 @@ self.addEventListener('push', (e) => {
   try { d = e.data ? e.data.json() : {}; } catch { d = { body: e.data ? e.data.text() : '' }; }
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const looking = wins.some((w) => w.visibilityState === 'visible');
-    // Skip the popup if Orbit is open on screen. Apple requires every push to show something, so always show there.
+    // Skip the popup only if Orbit is open AND focused right now. Apple requires every push to show something.
+    const looking = wins.some((w) => w.focused === true && w.visibilityState === 'visible');
     if (looking && !APPLE) return;
     await self.registration.showNotification(d.title || 'Orbit', {
       body: d.body || 'New message',

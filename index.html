@@ -458,6 +458,7 @@ async function liveConnect(isRetry){
 }
 // reconnect with growing, randomised delays so 500 phones don't all reconnect in the same second
 function liveRetry(){if(liveStop)return;clearTimeout(liveTimer);liveTimer=setTimeout(()=>liveConnect(true),liveBackoff+Math.random()*1500);liveBackoff=Math.min(liveBackoff*2,30000);}
+function liveSend(o){try{if(liveWs&&liveWs.readyState===1)liveWs.send(JSON.stringify(o));}catch(e){}}
 function liveDisconnect(){liveStop=true;clearTimeout(liveTimer);clearInterval(livePing);const w=liveWs;liveWs=null;if(w){try{w.close();}catch(e){}}}
 function liveWake(){if(LIVE_ON&&!liveStop&&(!liveWs||liveWs.readyState>1)){liveBackoff=1000;liveConnect(true);}}
 const gmsgQ=new Set();let gmsgT=null;
@@ -474,6 +475,10 @@ function applyRow(ev){
     if(ev.table==='group_members'&&ev.op==='INSERT'&&ev.row.user_id===AUTH.id){loadGroup(ev.row.group_id);if(!R.groups.some(g=>g.id===ev.row.group_id))queueRefresh('groups');}}
   build();render();}
 function onLive(ev){if(!AUTH)return;
+  if(ev.t==='dlv'){const p=R.profiles.find(x=>x.id===ev.uid);if(p&&(!p.last_seen||T(p.last_seen)<ev.at)){p.last_seen=ISO(ev.at);build();render();}return;}
+  if(ev.t==='seen'&&ev.cid){const r=R.reads.find(x=>x.user_id===ev.uid&&x.chat_key===ev.cid);
+    if(r){if(T(r.last_read_at)<ev.at)r.last_read_at=ISO(ev.at);}else R.reads.push({user_id:ev.uid,chat_key:ev.cid,last_read_at:ISO(ev.at)});
+    const p=R.profiles.find(x=>x.id===ev.uid);if(p&&(!p.last_seen||T(p.last_seen)<ev.at))p.last_seen=ISO(ev.at);build();render();return;}
   if(ev.t==='msg'){const m=ev.row;if(!R.messages.some(x=>x.id===m.id))R.messages.push(m);if(m.sender_id&&!R.profiles.some(x=>x.id===m.sender_id))queueRefresh('profiles');build();render();return;}
   if(ev.t==='gmsg'){if(R.messages.some(x=>x.id===ev.id))return;if(!R.members.some(x=>x.group_id===ev.g&&x.user_id===AUTH.id))return;gmsgQ.add(ev.id);clearTimeout(gmsgT);gmsgT=setTimeout(fetchGroupMsgs,150);return;}
   if(ev.t==='del'){R.messages=R.messages.filter(m=>m.id!==ev.id);build();render();return;}
@@ -542,10 +547,15 @@ function scheduleTouch(){clearTimeout(touchT);touchT=setTimeout(doTouch,800);}
 async function doTouch(){const me=meU();if(!me||!sb)return;
   const cids=['common',...mine().map(g=>g.id)];
   const latest=Math.max(0,...cids.flatMap(c=>chatMsgs(c).filter(m=>(m.rcpt||[]).includes(me.email)).map(m=>m.ts)));
-  if(latest>me.lastActive){const t=ISO(Math.max(Date.now(),latest+1));const p=R.profiles.find(x=>x.id===me.id);if(p)p.last_seen=t;me.lastActive=T(t);
+  if(latest>me.lastActive){const prev=me.lastActive||0;
+    const snd=new Set();cids.forEach(c=>chatMsgs(c).forEach(m=>{if(m.ts>prev&&(m.rcpt||[]).includes(me.email)&&st.users[m.from])snd.add(st.users[m.from].id);}));
+    if(snd.size)liveSend({t:'ack',to:[...snd],upto:ISO(latest)});
+    const t=ISO(Math.max(Date.now(),latest+1));const p=R.profiles.find(x=>x.id===me.id);if(p)p.last_seen=t;me.lastActive=T(t);
     await sb.from('profiles').update({last_seen:t}).eq('id',me.id);}
   const cid=openChat();if(!cid)return;const ms=chatMsgs(cid);const last=ms.length?ms[ms.length-1].ts:0;const rd=(st.reads[cid]||{})[me.email]||0;
   if(rd<last){const t=ISO(Math.max(Date.now(),last+1)),key=cid==='common'?'bigbang':cid;
+    const snd=new Set();ms.forEach(m=>{if(m.ts>rd&&!m.sys&&m.from!==me.email&&st.users[m.from])snd.add(st.users[m.from].id);});
+    if(snd.size)liveSend({t:'seen',cid:key,to:[...snd],upto:ISO(last)});
     const r=R.reads.find(x=>x.user_id===me.id&&x.chat_key===key);if(r)r.last_read_at=t;else R.reads.push({user_id:me.id,chat_key:key,last_read_at:t});
     (st.reads[cid]=st.reads[cid]||{})[me.email]=T(t);
     const {error}=await sb.from('chat_reads').upsert({user_id:me.id,chat_key:key,last_read_at:t});if(!error)renderMain();}
@@ -951,7 +961,10 @@ function notifHTML(){const st2=ui.pushState||'checking',p=getPrefs();
   if(st2==='on')return head+`<label class="chk"><input type="checkbox" data-act="pushpref" data-k="dm" ${p.dm?'checked':''}> Private chats</label>
     <label class="chk"><input type="checkbox" data-act="pushpref" data-k="group" ${p.group?'checked':''}> Groups</label>
     <label class="chk"><input type="checkbox" data-act="pushpref" data-k="bigbang" ${p.bigbang?'checked':''}> Big Bang (busy, off by default)</label>
-    <p class="muted" style="font-size:12px;margin:6px 0">Ægir never sends notifications.</p><button class="btn ghost sm" data-act="pushoff">Turn off on this device</button>`;
+    <p class="muted" style="font-size:12px;margin:6px 0">Ægir never sends notifications.</p>
+    <div class="actions" style="justify-content:flex-start;margin-top:8px"><button class="btn sm" data-act="pushtest">Send a test notification</button><button class="btn ghost sm" data-act="pushoff">Turn off on this device</button></div>
+    ${ui.pushDiag?`<p class="muted" style="font-size:12px;margin-top:8px">${esc(ui.pushDiag)}</p>`:''}
+    ${/Android/.test(navigator.userAgent)?'<p class="muted" style="font-size:12px;margin-top:6px"><b>Android not showing them?</b> Phone Settings → Apps → Orbit (and Chrome) → Notifications → allow all. Also turn off battery restrictions for Chrome, and check Do Not Disturb is off.</p>':''}`;
   if(st2==='ios-install')return head+'<p class="muted" style="font-size:13px">On iPhone, notifications work once Orbit is on your home screen: tap <b>Share</b> → <b>Add to Home Screen</b>, then open Orbit from there and come back here.</p>';
   if(st2==='denied')return head+'<p class="muted" style="font-size:13px">Notifications are blocked for this site. Allow them in your browser or phone settings, then reopen Orbit.</p>';
   if(st2==='unsupported')return head+'<p class="muted" style="font-size:13px">This browser can\'t show notifications. Try Chrome, Edge, Firefox or Safari.</p>';
@@ -1056,6 +1069,14 @@ async function act(a,d,el){
     case 'rxinfo':ui.rxid=d.id;ui.menu={cid:ui.cid,id:d.id};ui.modal='rxinfo';return render();
     case 'unreact':{const m=(R.reactions||[]).find(r=>r.message_id===ui.rxid&&r.user_id===me.id);ui.modal=null;render();if(m)await setReaction(ui.rxid,m.emoji);return;}
     case 'pushon':return enablePush();
+    case 'pushtest':{const tok=await relayAuth();if(!tok)return;ui.pushDiag='Sending a test… close or minimise Orbit now to see it.';render();
+      try{await pushResync();const r=await (await fetch(MEDIA_BASE+'/push/test',{method:'POST',headers:{Authorization:'Bearer '+tok}})).json();
+        if(!r.devices){ui.pushDiag='This account has no devices registered for notifications. Turn notifications off and on again.';return render();}
+        setTimeout(async()=>{try{const list=await (await fetch(MEDIA_BASE+'/push/status',{headers:{Authorization:'Bearer '+tok}})).json();
+          const fmtS=x=>{const svc=/apple/.test(x.service)?'Apple':/google|fcm/.test(x.service)?'Google (Android/Chrome)':/mozilla/.test(x.service)?'Firefox':/windows|notify/.test(x.service)?'Microsoft':x.service;
+            const st3=x.last_status;const ok=st3>=200&&st3<300;return `${svc}: ${ok?'✓ accepted':st3===0?'✗ could not reach':st3?'✗ rejected ('+st3+')':'waiting…'}`;};
+          ui.pushDiag=`${r.devices} device${r.devices>1?'s':''} registered. Last delivery → `+list.map(fmtS).join(' · ')+'. If it says accepted but nothing appeared, the phone is blocking Orbit\'s notifications (see tips below).';render();}catch(e){}},5000);}
+      catch(e){ui.pushDiag='Couldn\'t reach the notification service. Check your connection.';render();}return;}
     case 'pushoff':await disablePush();toast('Notifications are off on this device');return render();
     case 'pushpref':{const p2=getPrefs();p2[d.k]=!!(el&&el.checked);try{localStorage.setItem('orbit-push-prefs',JSON.stringify(p2));}catch(e){}await pushResync();return render();}
     case 'nagoff':try{localStorage.setItem('orbit-push-nag','done');}catch(e){}return render();
@@ -1161,7 +1182,7 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){hiddenAt=D
 // ticks: re-check who has received/read only while one of my recent messages in the open chat is still waiting
 setInterval(()=>{if(!booted||document.hidden)return;try{const cid=openChat();if(!cid)return;const me=st.session,now=Date.now();
   const waiting=chatMsgs(cid).some(m=>!m.sys&&m.from===me&&now-m.ts<15*60000&&tickState(m,cid)<3);
-  if(waiting)refresh(['reads','profiles']);}catch(e){}},45000);
+  if(waiting)refresh(['reads','profiles']);}catch(e){}},20000);
 if(!sb){renderAuth();}
 else{
   sb.auth.onAuthStateChange((ev,session)=>{setTimeout(()=>{
