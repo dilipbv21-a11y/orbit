@@ -891,6 +891,11 @@ async function aegirLoad(){if(A.loading)return;A.loading=true;
   try{const {data,error}=await sb.from('aegir_messages').select('*').order('created_at',{ascending:false}).limit(300);if(error)throw error;
     const have=new Map(A.msgs.map(m=>[m.id,m]));(data||[]).forEach(m=>have.set(m.id,m));A.msgs=[...have.values()].sort((a,b)=>a.created_at<b.created_at?-1:1);A.loaded=true;}
   catch(e){toast(errText(e));}finally{A.loading=false;render();}}
+// safety net: while Ægir is open, check for new messages every 15s in case the live connection drops
+setInterval(async()=>{if(!booted||document.hidden||ui.tab!=='aegir'||!A.loaded||A.loading)return;
+  const last=A.msgs.length?A.msgs[A.msgs.length-1].created_at:'1970-01-01T00:00:00Z';
+  try{const {data}=await sb.from('aegir_messages').select('*').gt('created_at',last).order('created_at',{ascending:true}).limit(100);
+    let n=0;(data||[]).forEach(m=>{if(!A.msgs.some(x=>x.id===m.id)){A.msgs.push(m);n++;}});if(n)render();}catch(e){}},15000);
 async function aegirNewAlias(){const {data,error}=await sb.rpc('new_aegir_alias');if(error){toast(errText(error));return null;}A.alias=data;A.mine.add(data);render();return data;}
 function aegirMsgHTML(m){const own=A.mine.has(m.alias);
   const body=m.kind==='deleted'?`<div class="mt delmsg">🚫 This message was deleted</div>`:m.kind==='sticker'&&AV[m.sticker]?`<div class="stk" role="img" aria-label="Sticker">${AV[m.sticker][2]}</div>`:`<div class="mt">${linkify(m.body)}</div>`;
@@ -930,7 +935,9 @@ async function enablePush(){
   if(isIOS&&!isStandalone())return toast('On iPhone: tap Share → "Add to Home Screen", open Orbit from your home screen, then turn on notifications.');
   if(!PUSH_OK()||!swReg)return toast('This browser can\'t show notifications.');
   const perm=await Notification.requestPermission();if(perm!=='granted'){ui.pushState=await pushState();render();return toast('Notifications are blocked. Allow them for this site in your browser settings.');}
-  try{const {key}=await (await fetch(MEDIA_BASE+'/push/key')).json();
+  let key=null;try{key=(await (await fetch(MEDIA_BASE+'/push/key')).json()).key;}catch(e){}
+  if(!key)return toast('The notification service isn\'t set up yet (the live relay needs updating).');
+  try{
     let sub=await swReg.pushManager.getSubscription();if(!sub)sub=await swReg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:ub64(key)});
     await savePushSub(sub);ui.pushState='on';try{localStorage.setItem('orbit-push-nag','done');}catch(e){}toast('Notifications are on 🔔');render();}
   catch(e){toast('Couldn\'t turn on notifications. Try again.');}}
